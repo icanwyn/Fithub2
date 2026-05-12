@@ -877,7 +877,6 @@ async function submitScores(){
   btn.textContent = "Saving…";
 
   const now = new Date();
-  const weekLabel = `Week of ${now.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
   
   const rows = skills
     .filter(sk => {
@@ -888,12 +887,11 @@ async function submitScores(){
       student_id: portalStudent.id,
       skill_id: sk.id,
       value: parseFloat(document.getElementById(`ef-${sk.id}`).value),
-      week_label: weekLabel,
       logged_at: now.toISOString()
+      // Note: week_label removed so we can store unlimited entries
     }));
 
   if (rows.length) {
-    // Use INSERT - this will create a new row every time
     const { error } = await sb.from("entries").insert(rows);
     
     if (error) {
@@ -910,6 +908,7 @@ async function submitScores(){
   setTimeout(() => ok.classList.add("hidden"), 3000);
   btn.disabled = false;
   btn.textContent = "Submit Scores";
+}
 }
 function portalOut(){portalStudent=null;document.getElementById("p-dash").classList.add("hidden");document.getElementById("p-select").classList.remove("hidden");}
 
