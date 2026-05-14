@@ -187,9 +187,10 @@ label.lbl:first-child{margin-top:0}
 
     <!-- Tab bar -->
     <div class="tab-row">
-      <button class="tab-btn active" id="tab-log"      onclick="setTab('log')">📋 Log Scores</button>
-      <button class="tab-btn"        id="tab-progress" onclick="setTab('progress')">📈 Progress</button>
-      <button class="tab-btn"        id="tab-goals"    onclick="setTab('goals')">🎯 My Goals</button>
+      <button class="tab-btn active" id="tab-log"         onclick="setTab('log')">📋 Log Scores</button>
+      <button class="tab-btn"        id="tab-progress"    onclick="setTab('progress')">📈 Progress</button>
+      <button class="tab-btn"        id="tab-goals"       onclick="setTab('goals')">🎯 Goals</button>
+      <button class="tab-btn"        id="tab-leaderboard" onclick="setTab('leaderboard')">🏆 Leaders</button>
     </div>
 
     <!-- TAB: LOG SCORES -->
@@ -218,17 +219,28 @@ label.lbl:first-child{margin-top:0}
       <div class="card">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:4px">🎯 My Goals</div>
         <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Set a target for each skill. Your progress is tracked automatically.</div>
-
         <div id="goal-fields"></div>
-
         <div id="goals-alert" style="margin-top:10px"></div>
         <button class="primary" onclick="saveGoals()" style="margin-top:14px">Save Goals ✓</button>
-
-        <!-- Goal progress summary -->
         <div id="goal-progress-section" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
           <div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Goal Progress</div>
           <div id="goal-progress-list"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- TAB: LEADERBOARD -->
+    <div id="pane-leaderboard" class="hidden">
+      <!-- Skill selector -->
+      <div style="margin-bottom:14px">
+        <select id="lb-skill-select" onchange="renderStudentLB()" style="font-size:14px;padding:10px 14px;border-radius:10px"></select>
+      </div>
+      <div id="lb-podium-student" style="display:flex;align-items:flex-end;justify-content:center;gap:8px;margin-bottom:16px"></div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div id="lb-list-student"></div>
+      </div>
+      <div style="font-size:12px;color:var(--text3);text-align:center;margin-top:12px;padding:0 1rem">
+        Showing top 10 · Log your scores to climb the leaderboard!
       </div>
     </div>
   </div>
@@ -243,7 +255,8 @@ label.lbl:first-child{margin-top:0}
       <div id="success-ranks"></div>
     </div>
     <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      <button onclick="showScoresScreen()" style="background:none;border-color:var(--border);color:var(--text2);width:auto;padding:8px 20px;font-size:13px">📈 See My Progress</button>
+      <button onclick="showScoresScreen()" style="background:none;border-color:var(--border);color:var(--text2);width:auto;padding:8px 20px;font-size:13px">📈 My Progress</button>
+      <button onclick="showLeaderboard()" style="background:linear-gradient(135deg,var(--gold),var(--gold-dk));color:#09122B;border-color:var(--gold);font-weight:600;width:auto;padding:8px 20px;font-size:13px">🏆 See Leaderboard</button>
       <button onclick="goBack('select')" style="background:none;border-color:var(--border);color:var(--text2);width:auto;padding:8px 20px;font-size:13px">Switch Student</button>
     </div>
   </div>
@@ -298,22 +311,125 @@ function getRanked(skid){
     .sort(function(a,b){return sk&&sk.lower_better?a.val-b.val:b.val-a.val;});
 }
 function getRank(sid,skid){var i=getRanked(skid).findIndex(function(s){return s.id===sid;});return i===-1?null:i+1;}
-function rankBadge(r,total){
+function rankBadge(r){
   if(!r)return "";
   if(r===1)return '<span class="badge badge-gold">🥇 #1</span>';
   if(r===2)return '<span class="badge badge-silver">🥈 #2</span>';
   if(r===3)return '<span class="badge badge-bronze">🥉 #3</span>';
-  return '<span class="badge badge-gray">#'+r+(total?" of "+total:"")+'</span>';
+  if(r<=10)return '<span class="badge badge-gray">Top 10</span>';
+  return ""; // outside top 10 — show nothing
 }
 
 // ── Tab switching ─────────────────────────────────────────────
 function setTab(t){
-  ["log","progress","goals"].forEach(function(id){
+  ["log","progress","goals","leaderboard"].forEach(function(id){
     var p=document.getElementById("pane-"+id);if(p)p.classList.toggle("hidden",id!==t);
     var b=document.getElementById("tab-"+id);if(b)b.classList.toggle("active",id===t);
   });
   if(t==="progress")renderProgress();
   if(t==="goals")renderGoals();
+  if(t==="leaderboard")renderStudentLB();
+}
+
+// ── STUDENT LEADERBOARD ───────────────────────────────────────
+function renderStudentLB(){
+  // Populate skill selector if needed
+  var sel=document.getElementById("lb-skill-select");
+  if(sel&&sel.options.length===0){
+    skills.forEach(function(sk){
+      var o=document.createElement("option");
+      o.value=sk.id;o.textContent=sk.name;
+      sel.appendChild(o);
+    });
+  }
+  if(!sel||!sel.value)return;
+  var skid=sel.value;
+  var sk=skills.find(function(s){return s.id===skid;});
+  if(!sk)return;
+
+  var ranked=students
+    .map(function(s){return {id:s.id,first:s.first,last:s.last,period:s.period,val:getLastVal(s.id,skid)};})
+    .filter(function(s){return s.val!==null;})
+    .sort(function(a,b){return sk.lower_better?a.val-b.val:b.val-a.val;});
+
+  var myRank=ranked.findIndex(function(s){return s.id===selectedStudent.id;})+1;
+  var top10=ranked.slice(0,10);
+  var iAmInTop10=myRank>=1&&myRank<=10;
+
+  // Mini podium (top 3)
+  var podEl=document.getElementById("lb-podium-student");
+  if(ranked.length>=1){
+    var order=[ranked[1],ranked[0],ranked[2]].filter(Boolean);
+    var hts=[60,84,48],rnks=[2,1,3];
+    var mdls=["badge-silver","badge-gold","badge-bronze"];
+    var labels=["2nd","1st","3rd"];
+    podEl.innerHTML=order.map(function(s,i){
+      var isMe=s.id===selectedStudent.id;
+      return '<div style="display:flex;flex-direction:column;align-items:center;flex:1;max-width:130px">'
+        +avHTML(s.first,s.last,rnks[i]===1?44:34)
+        +'<div style="font-weight:600;font-size:'+(rnks[i]===1?14:12)+'px;margin:5px 0 2px;color:'+(isMe?"var(--gold)":"var(--text)")+'">'+s.first+(isMe?" ⭐":"")+'</div>'
+        +'<div style="font-size:11px;color:var(--text2);margin-bottom:5px">'+s.val+' '+sk.unit+'</div>'
+        +'<span class="badge '+mdls[i]+'">'+labels[i]+'</span>'
+        +'<div style="width:100%;height:'+hts[i]+'px;background:'+(rnks[i]===1?"rgba(201,168,76,0.15)":"var(--surface2)")+';border-radius:6px 6px 0 0;margin-top:6px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border)">'
+        +'<span style="font-size:'+(rnks[i]===1?20:14)+'px;font-weight:700;color:'+(rnks[i]===1?"var(--gold)":"var(--text2)")+'">#'+rnks[i]+'</span>'
+        +'</div></div>';
+    }).join("");
+  } else {
+    podEl.innerHTML="";
+  }
+
+  // Top 10 list
+  var listEl=document.getElementById("lb-list-student");
+  if(!top10.length){
+    listEl.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">No scores yet for this skill. Be the first!</div>';
+    return;
+  }
+
+  var rows=top10.map(function(s,i){
+    var isMe=s.id===selectedStudent.id;
+    var imp=getImp(s.id,skid);
+    var medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:'+(isMe?"rgba(201,168,76,0.08)":"transparent")+'">'
+      +'<div style="width:28px;text-align:center;font-size:'+(medal?16:13)+'px;font-weight:700;color:'+(isMe?"var(--gold)":"var(--text3)")+';flex-shrink:0">'+(medal||("#"+(i+1)))+'</div>'
+      +avHTML(s.first,s.last,32)
+      +'<div style="flex:1">'
+      +'<div style="font-weight:'+(isMe?700:500)+';font-size:14px;color:'+(isMe?"var(--gold)":"var(--text)")+'">'+s.first+' '+s.last+(isMe?' <span style="font-size:11px;background:var(--gold-glow);color:var(--gold);padding:1px 7px;border-radius:99px;border:1px solid rgba(201,168,76,0.3)">You</span>':"")+'</div>'
+      +'<div style="font-size:12px;color:var(--text2)">Period '+s.period+'</div>'
+      +'</div>'
+      +'<div style="text-align:right">'
+      +'<div style="font-weight:600;font-size:15px">'+s.val+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+sk.unit+'</span></div>'
+      +(imp?'<div style="font-size:11px;color:'+(imp.ok?"var(--gold)":"var(--red)")+'">'+(imp.ok?"▲":"▼")+imp.pct+'%</div>':"")
+      +'</div>'
+      +'</div>';
+  }).join("");
+
+  // If student is outside top 10, append their row at the bottom with a divider
+  if(!iAmInTop10&&myRank>0){
+    var me=ranked[myRank-1];
+    var myImp=getImp(selectedStudent.id,skid);
+    rows+='<div style="padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border)">'
+      +'<div style="font-size:11px;color:var(--text3);text-align:center">· · ·</div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(201,168,76,0.08)">'
+      +'<div style="width:28px;text-align:center;font-size:13px;font-weight:700;color:var(--gold);flex-shrink:0">You</div>'
+      +avHTML(selectedStudent.first,selectedStudent.last,32)
+      +'<div style="flex:1">'
+      +'<div style="font-weight:700;font-size:14px;color:var(--gold)">'+selectedStudent.first+' '+selectedStudent.last+' <span style="font-size:11px;background:var(--gold-glow);color:var(--gold);padding:1px 7px;border-radius:99px;border:1px solid rgba(201,168,76,0.3)">You</span></div>'
+      +'<div style="font-size:12px;color:var(--text2)">Keep going — '+(myRank-10)+' spots to top 10!</div>'
+      +'</div>'
+      +'<div style="text-align:right">'
+      +(me?'<div style="font-weight:600;font-size:15px">'+me.val+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+sk.unit+'</span></div>':"")
+      +(myImp?'<div style="font-size:11px;color:'+(myImp.ok?"var(--gold)":"var(--red)")+'">'+(myImp.ok?"▲":"▼")+myImp.pct+'%</div>':"")
+      +'</div>'
+      +'</div>';
+  } else if(myRank===0){
+    // Student hasn't logged this skill yet
+    rows+='<div style="padding:14px 16px;background:rgba(201,168,76,0.05);border-top:1px solid var(--border);text-align:center;font-size:13px;color:var(--text2)">'
+      +'Log your '+sk.name+' score to appear on the leaderboard!'
+      +'</div>';
+  }
+
+  listEl.innerHTML=rows;
 }
 
 // ── BOOT ──────────────────────────────────────────────────────
@@ -499,7 +615,7 @@ function renderProgress(){
         +'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+(last!==null?"Latest: "+last+" "+sk.unit:entryCount===0?"No entries yet":"—")+(entryCount>0?' · '+entryCount+' entr'+(entryCount===1?"y":"ies"):"")+'</div>'
         +'</div>'
         +(imp?'<span style="font-size:12px;color:'+(imp.ok?"var(--gold)":"var(--red)")+'">'+(imp.ok?"▲":"▼")+imp.pct+'%</span>':"")
-        +rankBadge(rank,students.length)
+        +rankBadge(rank)
         +'<span style="color:var(--text3);font-size:16px;margin-left:4px">›</span>'
         +'</div>'
         +chartHTML
@@ -636,7 +752,8 @@ async function submitScores(){
     var rank=getRank(selectedStudent.id,sk.id);
     var val=getLastVal(selectedStudent.id,sk.id);
     if(!val)return "";
-    return '<div class="rank-row"><div style="flex:1"><div style="font-weight:500;font-size:14px">'+sk.name+'</div><div style="font-size:12px;color:var(--text2)">'+val+' '+sk.unit+'</div></div>'+rankBadge(rank,students.length)+'</div>';
+    var badge=rankBadge(rank); // empty string if outside top 10
+    return '<div class="rank-row"><div style="flex:1"><div style="font-weight:500;font-size:14px">'+sk.name+'</div><div style="font-size:12px;color:var(--text2)">'+val+' '+sk.unit+'</div></div>'+badge+'</div>';
   }).filter(Boolean).join("");
 
   document.getElementById("success-msg").textContent="Scores saved for "+selectedStudent.first+"! Great work this week.";
@@ -647,6 +764,11 @@ async function submitScores(){
 function showScoresScreen(){
   show("screen-scores");
   setTab("progress");
+}
+
+function showLeaderboard(){
+  show("screen-scores");
+  setTab("leaderboard");
 }
 
 function goBack(screen){
@@ -704,7 +826,7 @@ function openSkillModal(skid){
   document.getElementById("sk-modal-stats").innerHTML=[
     {icon:"📍",label:"Latest",val:last!==null?last+" "+sk.unit:"—"},
     {icon:"⭐",label:"Personal Best",val:best!==null?best+" "+sk.unit:"—"},
-    {icon:"🏆",label:"Class Rank",val:rank?"#"+rank+" of "+students.length:"—"},
+    {icon:"🏆",label:"Class Rank",val:rank&&rank<=10?"#"+rank+(rank===1?" 🥇":rank===2?" 🥈":rank===3?" 🥉":""):"Keep going!"},
   ].map(function(c){
     return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;text-align:center">'
       +'<div style="font-size:18px;margin-bottom:4px">'+c.icon+'</div>'
