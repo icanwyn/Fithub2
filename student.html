@@ -282,7 +282,8 @@ function show(id){
   });
   var el=document.getElementById(id);if(el)el.classList.remove("hidden");
 }
-function getVals(sid,skid){return (entries[sid]&&entries[sid][skid])||[];}
+function getEntries(sid,skid){return (entries[sid]&&entries[sid][skid])||[];}
+function getVals(sid,skid){return getEntries(sid,skid).map(function(e){return e.value;});}
 function getLastVal(sid,skid){var v=getVals(sid,skid);return v.length?v[v.length-1]:null;}
 function getImp(sid,skid){
   var v=getVals(sid,skid);if(v.length<2)return null;
@@ -334,14 +335,18 @@ function setTab(t){
   var r3=await sb.from("skills").select("*").eq("teacher_id",teacherId).order("created_at");
   skills=r3.data||[];
 
-  // Load entries — INSERT only (no dedup), preserve full history
+  // Load entries — store full objects {value, logged_at, week_label} for history view
   if(students.length){
     var ids=students.map(function(s){return s.id;});
     var r4=await sb.from("entries").select("*").in("student_id",ids).order("logged_at");
     (r4.data||[]).forEach(function(e){
       if(!entries[e.student_id])entries[e.student_id]={};
       if(!entries[e.student_id][e.skill_id])entries[e.student_id][e.skill_id]=[];
-      entries[e.student_id][e.skill_id].push(Number(e.value));
+      entries[e.student_id][e.skill_id].push({
+        value: Number(e.value),
+        logged_at: e.logged_at,
+        week_label: e.week_label||""
+      });
     });
   }
 
@@ -446,11 +451,15 @@ function loadScoreScreen(){
   // Score entry fields
   document.getElementById("score-fields").innerHTML=skills.map(function(sk){
     var last=getLastVal(s.id,sk.id);
+    var entryCount=getVals(s.id,sk.id).length;
     return '<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<div><div style="font-weight:600;font-size:15px">'+sk.name+'</div>'
       +'<div style="font-size:12px;color:var(--text2)">'+(sk.lower_better?"↓ lower is better":"↑ higher is better")+' · '+sk.unit+'</div></div>'
-      +(last!==null?'<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold)">'+last+' '+sk.unit+'</div></div>':"")
+      +'<div style="text-align:right">'
+      +(last!==null?'<div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold)">'+last+' '+sk.unit+'</div>':"")
+      +(entryCount>0?'<button onclick="openSkillModal(\''+sk.id+'\')" style="width:auto;padding:2px 8px;font-size:10px;margin-top:4px;background:none;border-color:var(--border);color:var(--text3)">'+entryCount+' entries ›</button>':"")
+      +'</div>'
       +'</div>'
       +'<input type="number" step="0.1" inputmode="decimal" placeholder="Enter '+sk.unit+'…" id="sf-'+sk.id+'" style="font-size:24px;text-align:center;padding:14px;border-radius:12px"/>'
       +'</div>';
@@ -459,40 +468,47 @@ function loadScoreScreen(){
 
 function renderProgress(){
   var s=selectedStudent;
-  document.getElementById("my-progress").innerHTML=skills.map(function(sk){
-    var vals=getVals(s.id,sk.id);
-    var rank=getRank(s.id,sk.id);
-    var imp=getImp(s.id,sk.id);
-    var goal=studentGoals[s.id]&&studentGoals[s.id][sk.id];
-    var last=getLastVal(s.id,sk.id);
+  document.getElementById("my-progress").innerHTML=
+    '<div style="font-size:12px;color:var(--text3);margin-bottom:12px;text-align:center">Tap any skill to see your full history</div>'
+    +skills.map(function(sk){
+      var vals=getVals(s.id,sk.id);
+      var rank=getRank(s.id,sk.id);
+      var imp=getImp(s.id,sk.id);
+      var goal=studentGoals[s.id]&&studentGoals[s.id][sk.id];
+      var last=getLastVal(s.id,sk.id);
+      var entryCount=vals.length;
 
-    // Mini bar chart
-    var chartHTML="";
-    if(vals.length>1){
-      var mn=Math.min.apply(null,vals)-1,mx=Math.max.apply(null,vals)+1,range=mx-mn||1;
-      chartHTML='<div style="display:flex;align-items:flex-end;gap:2px;height:40px;margin:8px 0">'
-        +vals.slice(-10).map(function(v,i,arr){
-          var h=Math.max(3,Math.round(((sk.lower_better?mx-v:v-mn)/range)*36));
-          var isLast=i===arr.length-1;
-          return '<div style="flex:1;height:'+h+'px;background:'+(isLast?"var(--gold)":"rgba(201,168,76,0.3)")+';border-radius:3px 3px 0 0"></div>';
-        }).join("")
-        +'</div>';
-    }
+      // Mini spark bars (last 8 entries)
+      var chartHTML="";
+      if(vals.length>1){
+        var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),range=mx-mn||1;
+        chartHTML='<div style="display:flex;align-items:flex-end;gap:2px;height:32px;margin:8px 0">'
+          +vals.slice(-8).map(function(v,i,arr){
+            var h=Math.max(3,Math.round(((sk.lower_better?mx-v:v-mn)/range)*28)+3);
+            var isLast=i===arr.length-1;
+            return '<div style="flex:1;height:'+h+'px;background:'+(isLast?"var(--gold)":"rgba(201,168,76,0.3)")+';border-radius:3px 3px 0 0"></div>';
+          }).join("")
+          +'</div>';
+      }
 
-    return '<div class="rank-row" style="flex-direction:column;align-items:stretch;gap:8px">'
-      +'<div style="display:flex;align-items:center;gap:10px">'
-      +'<div style="flex:1"><div style="font-weight:500;font-size:13px">'+sk.name+'</div>'
-      +'<div style="font-size:12px;color:var(--text2)">'+(vals.length?"Latest: "+last+" "+sk.unit:"No entries yet")+'</div></div>'
-      +(imp?'<span style="font-size:12px;color:'+(imp.ok?"var(--gold)":"var(--red)")+'">'+(imp.ok?"▲":"▼")+imp.pct+'%</span>':"")
-      +rankBadge(rank,students.length)
-      +'</div>'
-      +chartHTML
-      +(goal&&last!==null?
-        '<div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px"><span>🎯 Goal: '+goal+' '+sk.unit+'</span><span>'+(sk.lower_better?last<=goal:last>=goal)?'<span style="color:var(--green)">✓ Achieved!</span>':Math.abs(last-goal).toFixed(1)+' away'+'</span></div>'
-        +'<div class="goal-bar-wrap"><div class="goal-bar-fill" style="width:'+Math.min(100,Math.round(sk.lower_better?(goal/last*100):(last/goal*100)))+'%"></div></div></div>'
-      :"")
-      +'</div>';
-  }).join("");
+      return '<button onclick="openSkillModal(\''+sk.id+'\')" style="display:block;width:100%;text-align:left;border-radius:12px;padding:0;border:1px solid var(--border);background:var(--surface2);margin-bottom:8px;overflow:hidden;cursor:pointer">'
+        +'<div style="padding:12px 14px">'
+        +'<div style="display:flex;align-items:center;gap:10px">'
+        +'<div style="flex:1">'
+        +'<div style="font-weight:600;font-size:14px">'+sk.name+'</div>'
+        +'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+(last!==null?"Latest: "+last+" "+sk.unit:entryCount===0?"No entries yet":"—")+(entryCount>0?' · '+entryCount+' entr'+(entryCount===1?"y":"ies"):"")+'</div>'
+        +'</div>'
+        +(imp?'<span style="font-size:12px;color:'+(imp.ok?"var(--gold)":"var(--red)")+'">'+(imp.ok?"▲":"▼")+imp.pct+'%</span>':"")
+        +rankBadge(rank,students.length)
+        +'<span style="color:var(--text3);font-size:16px;margin-left:4px">›</span>'
+        +'</div>'
+        +chartHTML
+        +(goal&&last!==null
+          ?'<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px"><span>🎯 Goal: '+goal+' '+sk.unit+'</span><span>'+(sk.lower_better?last<=goal:last>=goal?'<span style="color:var(--green)">✓ Achieved!</span>':Math.abs(last-goal).toFixed(1)+" away")+'</span></div><div class="goal-bar-wrap"><div class="goal-bar-fill" style="width:'+Math.min(100,Math.round(sk.lower_better?(goal/last*100):(last/goal*100)))+'%"></div></div></div>'
+          :"")
+        +'</div>'
+        +'</button>';
+    }).join("");
 }
 
 function renderGoals(){
@@ -609,7 +625,7 @@ async function submitScores(){
   rows.forEach(function(r){
     if(!entries[r.student_id])entries[r.student_id]={};
     if(!entries[r.student_id][r.skill_id])entries[r.student_id][r.skill_id]=[];
-    entries[r.student_id][r.skill_id].push(r.value);
+    entries[r.student_id][r.skill_id].push({value:r.value, logged_at:r.logged_at, week_label:r.week_label});
   });
 
   // Clear fields
@@ -639,5 +655,148 @@ function goBack(screen){
   if(screen==="select")filterStudents();
 }
 </script>
-</body>
-</html>
+<!-- SKILL DETAIL MODAL -->
+<div id="skill-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:999;display:flex;align-items:flex-end;justify-content:center;padding:0">
+  <div id="skill-modal-inner" style="background:var(--surface);border:1px solid var(--border2);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,0.5);padding-bottom:env(safe-area-inset-bottom)">
+    <!-- Handle bar -->
+    <div style="display:flex;justify-content:center;padding:12px 0 4px">
+      <div style="width:40px;height:4px;background:var(--border2);border-radius:99px"></div>
+    </div>
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px">
+      <div>
+        <div id="sk-modal-name" style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--gold)"></div>
+        <div id="sk-modal-sub" style="font-size:12px;color:var(--text2);margin-top:2px"></div>
+      </div>
+      <button onclick="closeSkillModal()" style="width:36px;height:36px;border-radius:50%;padding:0;background:var(--surface2);border-color:var(--border);font-size:18px;color:var(--text2)">×</button>
+    </div>
+    <!-- Content -->
+    <div style="padding:0 20px 24px">
+      <!-- Stats row -->
+      <div id="sk-modal-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px"></div>
+      <!-- Chart -->
+      <div id="sk-modal-chart" style="margin-bottom:20px"></div>
+      <!-- History table -->
+      <div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Full History</div>
+      <div id="sk-modal-history"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── SKILL DETAIL MODAL ────────────────────────────────────────
+function openSkillModal(skid){
+  var sk=skills.find(function(s){return s.id===skid;});
+  var s=selectedStudent;
+  if(!sk||!s)return;
+
+  var allEntries=getEntries(s.id,skid); // [{value, logged_at, week_label}]
+  var vals=allEntries.map(function(e){return e.value;});
+  var rank=getRank(s.id,skid);
+  var imp=getImp(s.id,skid);
+  var best=vals.length?(sk.lower_better?Math.min.apply(null,vals):Math.max.apply(null,vals)):null;
+  var last=vals.length?vals[vals.length-1]:null;
+
+  document.getElementById("sk-modal-name").textContent=sk.name;
+  document.getElementById("sk-modal-sub").textContent=sk.unit+" · "+(sk.lower_better?"↓ lower is better":"↑ higher is better");
+
+  // Stat cards
+  document.getElementById("sk-modal-stats").innerHTML=[
+    {icon:"📍",label:"Latest",val:last!==null?last+" "+sk.unit:"—"},
+    {icon:"⭐",label:"Personal Best",val:best!==null?best+" "+sk.unit:"—"},
+    {icon:"🏆",label:"Class Rank",val:rank?"#"+rank+" of "+students.length:"—"},
+  ].map(function(c){
+    return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;text-align:center">'
+      +'<div style="font-size:18px;margin-bottom:4px">'+c.icon+'</div>'
+      +'<div style="font-size:13px;font-weight:600;color:var(--gold)">'+c.val+'</div>'
+      +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">'+c.label+'</div>'
+      +'</div>';
+  }).join("");
+
+  // Bar chart
+  var chartHTML="";
+  if(vals.length>0){
+    var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),range=mx-mn||1;
+    var barW=Math.max(24, Math.min(48, Math.floor(320/vals.length)-4));
+    chartHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px">'
+      +'<div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Progress Chart</div>'
+      +(imp?'<div style="font-size:12px;color:'+(imp.ok?"var(--gold)":"var(--red)")+';margin-bottom:10px">'+(imp.ok?"📈 Improved":"📉 Down")+' '+imp.pct+'% since first entry</div>':"")
+      +'<div style="display:flex;align-items:flex-end;gap:4px;height:80px;overflow-x:auto;padding-bottom:4px">'
+      +allEntries.map(function(e,i){
+        var h=Math.max(6,Math.round(((sk.lower_better?mx-e.value:e.value-mn)/range)*70)+6);
+        var isLast=i===allEntries.length-1;
+        var isBest=e.value===best;
+        var bg=isLast?"var(--gold)":isBest?"rgba(201,168,76,0.7)":"rgba(201,168,76,0.25)";
+        var d=new Date(e.logged_at);
+        var label=(d.getMonth()+1)+"/"+(d.getDate());
+        return '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:'+barW+'px">'
+          +'<div style="font-size:9px;color:var(--text3);margin-bottom:2px;white-space:nowrap">'+e.value+'</div>'
+          +'<div style="width:100%;height:'+h+'px;background:'+bg+';border-radius:4px 4px 0 0'+(isLast?';box-shadow:0 0 8px rgba(201,168,76,0.4)':'')+'" title="'+e.value+' '+sk.unit+'"></div>'
+          +'<div style="font-size:8px;color:var(--text3);margin-top:3px;white-space:nowrap">'+label+'</div>'
+          +'</div>';
+      }).join("")
+      +'</div></div>';
+  } else {
+    chartHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px;background:var(--surface2);border-radius:12px">No entries yet for this skill</div>';
+  }
+  document.getElementById("sk-modal-chart").innerHTML=chartHTML;
+
+  // History table — newest first
+  if(allEntries.length){
+    var reversed=[...allEntries].reverse();
+    document.getElementById("sk-modal-history").innerHTML=
+      '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+      +'<div style="display:grid;grid-template-columns:1fr auto auto;gap:0;font-size:11px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">'
+      +'<span>Date</span><span style="text-align:right;padding-right:16px">Score</span><span style="text-align:right">vs Best</span></div>'
+      +reversed.map(function(e,i){
+        var d=new Date(e.logged_at);
+        var dateStr=d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+        var timeStr=d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
+        var isBest=e.value===best;
+        var isLatest=i===0;
+        var diff=best!==null?e.value-best:null;
+        var diffStr="";
+        if(diff!==null){
+          if(isBest) diffStr='<span style="color:var(--gold);font-size:11px">★ Best</span>';
+          else{
+            var sign=sk.lower_better?(diff<0?"▲":"▼"):(diff>0?"▲":"▼");
+            var good=sk.lower_better?diff<0:diff>0;
+            diffStr='<span style="color:'+(good?"var(--gold)":"var(--red)")+';font-size:11px">'+sign+' '+Math.abs(diff).toFixed(1)+'</span>';
+          }
+        }
+        return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:0;padding:11px 14px;border-bottom:1px solid var(--border);align-items:center;background:'+(isLatest?"rgba(201,168,76,0.06)":"transparent")+'">'
+          +'<div><div style="font-size:13px;font-weight:'+(isLatest?600:400)+'">'+dateStr+(isLatest?' <span style="font-size:10px;color:var(--gold);background:var(--gold-glow);padding:1px 6px;border-radius:99px">Latest</span>':"")+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">'+timeStr+(e.week_label?' · '+e.week_label:"")+'</div></div>'
+          +'<div style="font-size:15px;font-weight:600;color:'+(isBest?"var(--gold)":"var(--text)")+';text-align:right;padding-right:16px">'+e.value+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+sk.unit+'</span></div>'
+          +'<div style="text-align:right;min-width:52px">'+diffStr+'</div>'
+          +'</div>';
+      }).join("")
+      +'</div>';
+  } else {
+    document.getElementById("sk-modal-history").innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">No history yet. Submit your scores to start tracking!</div>';
+  }
+
+  document.getElementById("skill-modal").classList.remove("hidden");
+  // Swipe down to close
+  setupModalSwipe();
+}
+
+function closeSkillModal(){
+  document.getElementById("skill-modal").classList.add("hidden");
+}
+
+// Tap backdrop to close
+document.getElementById("skill-modal").addEventListener("click",function(e){
+  if(e.target===this)closeSkillModal();
+});
+
+// Simple swipe-down to close on mobile
+function setupModalSwipe(){
+  var inner=document.getElementById("skill-modal-inner");
+  var startY=0;
+  inner.addEventListener("touchstart",function(e){startY=e.touches[0].clientY;},{passive:true});
+  inner.addEventListener("touchend",function(e){
+    if(e.changedTouches[0].clientY-startY>80)closeSkillModal();
+  },{passive:true});
+}
+</script>
