@@ -806,72 +806,64 @@ function syncFilters(){
 
 // ── ROSTER ────────────────────────────────────────────────────
 function renderRoster(){
-  const period=document.getElementById("roster-period")&&document.getElementById("roster-period").value||"all";
-  const grade=document.getElementById("roster-grade")&&document.getElementById("roster-grade").value||"all";
-  const sort=document.getElementById("roster-sort")&&document.getElementById("roster-sort").value||"last";
-  const search=(document.getElementById("roster-search")&&document.getElementById("roster-search").value||"").toLowerCase().trim();
+  var period=document.getElementById("roster-period")&&document.getElementById("roster-period").value||"all";
+  var grade=document.getElementById("roster-grade")&&document.getElementById("roster-grade").value||"all";
+  var sort=document.getElementById("roster-sort")&&document.getElementById("roster-sort").value||"last";
+  var search=(document.getElementById("roster-search")&&document.getElementById("roster-search").value||"").toLowerCase().trim();
 
-  let list=students.filter(function(s){
-    const matchPeriod=period==="all"||s.period===+period;
-    const matchGrade=grade==="all"||s.grade===+grade;
-    const matchSearch=!search||
-      s.first.toLowerCase().includes(search)||
-      s.last.toLowerCase().includes(search)||
-      (s.email||"").toLowerCase().includes(search)||
-      (s.access_code||"").toLowerCase().includes(search);
+  var list=students.filter(function(s){
+    var matchPeriod=period==="all"||s.period===+period;
+    var matchGrade=grade==="all"||s.grade===+grade;
+    var matchSearch=!search||s.first.toLowerCase().includes(search)||s.last.toLowerCase().includes(search)||(s.email||"").toLowerCase().includes(search)||(s.access_code||"").toLowerCase().includes(search);
     return matchPeriod&&matchGrade&&matchSearch;
   });
 
-  if(sort==="last") list=[...list].sort(function(a,b){return a.last.localeCompare(b.last)||a.first.localeCompare(b.first);});
-  else if(sort==="first") list=[...list].sort(function(a,b){return a.first.localeCompare(b.first)||a.last.localeCompare(b.last);});
-  else if(sort==="progress") list=[...list].sort(function(a,b){
-    return skills.filter(function(sk){return getVals(b.id,sk.id).length>0;}).length
-          -skills.filter(function(sk){return getVals(a.id,sk.id).length>0;}).length;
-  });
-  else if(sort==="lacking") list=[...list].sort(function(a,b){
-    return skills.filter(function(sk){return getVals(a.id,sk.id).length>0;}).length
-          -skills.filter(function(sk){return getVals(b.id,sk.id).length>0;}).length;
-  });
+  function loggedCount(s){ return skills.filter(function(sk){return getVals(s.id,sk.id).length>0;}).length; }
 
-  const countEl=document.getElementById("roster-count");
+  if(sort==="last") list=list.slice().sort(function(a,b){return a.last.localeCompare(b.last)||a.first.localeCompare(b.first);});
+  else if(sort==="first") list=list.slice().sort(function(a,b){return a.first.localeCompare(b.first)||a.last.localeCompare(b.last);});
+  else if(sort==="progress") list=list.slice().sort(function(a,b){return loggedCount(b)-loggedCount(a);});
+  else if(sort==="lacking") list=list.slice().sort(function(a,b){return loggedCount(a)-loggedCount(b);});
+
+  var countEl=document.getElementById("roster-count");
   if(countEl) countEl.textContent=list.length+(list.length!==students.length?" of "+students.length:"")+" students";
 
-  const tb=document.getElementById("roster-body");
+  var tb=document.getElementById("roster-body");
   if(!list.length){
-    tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">'
-      +(search?'No students match "'+search+'".':'No students yet.')+'</td></tr>';
+    tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">'+(search?'No students match "'+search+'".':'No students yet.')+'</td></tr>';
     return;
   }
 
-  const doGroup=sort==="last"||sort==="first";
-  let lastLetter="";
+  var doGroup=sort==="last"||sort==="first";
+  var lastLetter="";
 
   tb.innerHTML=list.map(function(s){
-    const logged=skills.filter(function(sk){return getVals(s.id,sk.id).length>0;}).length;
-    const pct=skills.length?(logged/skills.length*100).toFixed(0):0;
-    const noEntries=logged===0;
+    var logged=loggedCount(s);
+    var pct=skills.length?Math.round(logged/skills.length*100):0;
+    var noEntries=logged===0;
+    var barColor=pct===100?"var(--gold)":pct>0?"var(--green)":"var(--surface3)";
+    var countColor=noEntries?"var(--red)":"var(--text2)";
 
-    let groupHeader="";
+    var groupHeader="";
     if(doGroup){
-      const key=(sort==="last"?s.last:s.first)[0].toUpperCase();
+      var key=(sort==="last"?s.last:s.first)[0].toUpperCase();
       if(key!==lastLetter){
         lastLetter=key;
         groupHeader='<tr><td colspan="6" style="background:rgba(201,168,76,0.06);padding:5px 10px;font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.08em;border-bottom:1px solid var(--border)">'+key+'</td></tr>';
       }
     }
 
-    const barColor=pct==100?"var(--gold)":pct>0?"var(--green)":"var(--surface3)";
-    const row='<tr style="'+(noEntries?"opacity:.8":"")+'"><td><div class="row">'+avHTML(s.first,s.last,28)
-      +'<div><div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openStudentProfile(''+s.id+'')">'+s.first+' '+s.last+'</div>'
+    var row='<tr style="'+(noEntries?"opacity:.8":"")+'"><td><div class="row">'+avHTML(s.first,s.last,28)
+      +'<div><div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openStudentProfile(\''+s.id+'\')">'+s.first+' '+s.last+'</div>'
       +'<div style="font-size:11px;color:var(--text2)">'+(s.email||"")+'</div></div></div></td>'
       +'<td style="color:var(--text2)">'+s.grade+'</td>'
       +'<td style="color:var(--text2)">P'+s.period+'</td>'
       +'<td><div class="row" style="gap:6px"><span class="mono badge badge-gray" style="font-size:12px;padding:3px 10px">'+(s.access_code||"—")+'</span>'
-      +'<button onclick="resetCode(''+s.id+'')" style="font-size:11px;padding:3px 8px" title="Generate new code">&#x21BB;</button></div></td>'
+      +'<button onclick="resetCode(\''+s.id+'\')" style="font-size:11px;padding:3px 8px" title="Generate new code">&#x21BB;</button></div></td>'
       +'<td><div class="row" style="gap:6px"><div style="height:4px;width:56px;background:var(--border2);border-radius:99px;overflow:hidden">'
       +'<div style="height:4px;width:'+pct+'%;background:'+barColor+';border-radius:99px"></div></div>'
-      +'<span style="font-size:11px;color:'+(noEntries?"var(--red)":"var(--text2)")+'">'+logged+'/'+skills.length+'</span></div></td>'
-      +'<td><button onclick="deleteStudent(''+s.id+'',''+s.first+' '+s.last+'')" style="font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent">&#x1F5D1;</button></td>'
+      +'<span style="font-size:11px;color:'+countColor+'">'+logged+'/'+skills.length+'</span></div></td>'
+      +'<td><button onclick="deleteStudent(\''+s.id+'\',\''+s.first+' '+s.last+'\')" style="font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent">&#x1F5D1;</button></td>'
       +'</tr>';
     return groupHeader+row;
   }).join("");
