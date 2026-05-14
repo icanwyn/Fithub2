@@ -606,9 +606,93 @@ async function bootApp(user){
   await loadProfile();
   await loadData();
   await loadMergedStudents();
+  startRealtime();
 }
 
-async function doSignOut(){await sb.auth.signOut();location.reload();}
+async function doSignOut(){
+  if(realtimeChannel) sb.removeChannel(realtimeChannel);
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// ── REAL-TIME SYNC ────────────────────────────────────────────
+// Listens for new entries and goal updates from the student page
+// and updates the teacher dashboard instantly — no manual refresh needed
+let realtimeChannel = null;
+let realtimeDebounce = null;
+
+function startRealtime(){
+  if(realtimeChannel) sb.removeChannel(realtimeChannel);
+
+  realtimeChannel = sb.channel("teacher-"+ME.id)
+
+    // New entry submitted by a student
+    .on("postgres_changes",{
+      event:"INSERT",
+      schema:"public",
+      table:"entries"
+    }, function(payload){
+      const e = payload.new;
+      // Only care about entries for our own students (or merged students)
+      const isOurs = students.find(function(s){return s.id===e.student_id;});
+      const isMerged = mergedStudents.find(function(s){return s.id===e.student_id;});
+      if(!isOurs&&!isMerged) return;
+
+      // Add to local entries immediately
+      if(!entries[e.student_id]) entries[e.student_id]={};
+      if(!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id]=[];
+      entries[e.student_id][e.skill_id].push(Number(e.value));
+
+      // Debounce re-renders so rapid multi-skill submissions only trigger once
+      clearTimeout(realtimeDebounce);
+      realtimeDebounce = setTimeout(function(){
+        renderRoster();
+        renderProgress();
+        renderLB();
+        showLiveToast("📊 New score submitted by a student");
+      }, 400);
+    })
+
+    // Student updated their goals
+    .on("postgres_changes",{
+      event:"UPDATE",
+      schema:"public",
+      table:"students",
+      filter:"teacher_id=eq."+ME.id
+    }, function(payload){
+      const updated = payload.new;
+      // Update local student record
+      const idx = students.findIndex(function(s){return s.id===updated.id;});
+      if(idx>-1){
+        students[idx] = Object.assign({}, students[idx], updated);
+        if(updated.goals && typeof updated.goals==="object"){
+          studentGoals[updated.id] = updated.goals;
+        }
+      }
+      // If the profile modal is open for this student, refresh it
+      if(profileStudent && profileStudent.id===updated.id){
+        openStudentProfile(updated.id);
+      }
+      showLiveToast("🎯 A student updated their goals");
+    })
+
+    .subscribe();
+}
+
+// Small non-intrusive toast notification
+function showLiveToast(msg){
+  let toast = document.getElementById("live-toast");
+  if(!toast){
+    toast = document.createElement("div");
+    toast.id = "live-toast";
+    toast.style.cssText = "position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:10px 16px;font-size:13px;color:var(--gold);box-shadow:0 4px 20px rgba(0,0,0,0.4);z-index:9999;transition:opacity .3s;opacity:0;pointer-events:none";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = "1";
+  clearTimeout(toast._hide);
+  toast._hide = setTimeout(function(){toast.style.opacity="0";}, 3000);
+}
 
 // ── PROFILE ───────────────────────────────────────────────────
 async function loadProfile(){
@@ -749,7 +833,7 @@ function renderProgress(){
 }
 
 // ── LEADERBOARD ───────────────────────────────────────────────
-function renderLB(){
+function renderLB(showAll){
   const skid=document.getElementById("lb-skill")&&document.getElementById("lb-skill").value;
   const period=document.getElementById("lb-period")&&document.getElementById("lb-period").value||"all";
   const sk=skills.find(function(s){return s.id===skid;});
@@ -764,10 +848,21 @@ function renderLB(){
   } else if(pod) pod.innerHTML="";
   const tb=document.getElementById("lb-body");if(!tb)return;
   if(!ranked.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">No scores yet.</td></tr>';return;}
-  tb.innerHTML=ranked.map(function(s,i){
+
+  const display = showAll ? ranked : ranked.slice(0, 10);
+  const remaining = ranked.length - 10;
+
+  tb.innerHTML=display.map(function(s,i){
     const imp=getImp(s.id,skid);
     return '<tr style="'+(i===0?"background:rgba(201,168,76,0.07);border-left:2px solid var(--gold)":"")+'"><td>'+rankBadge(i+1)+'</td><td><div class="row">'+avHTML(s.first,s.last,26)+'<span style="font-weight:'+(i<3?600:400)+'">'+s.first+' '+s.last+'</span></div></td><td style="color:var(--text2)">P'+s.period+'</td><td style="font-weight:500">'+s.val+' '+(sk&&sk.unit||"")+'</td><td>'+spark(getVals(s.id,skid),sk&&sk.lower_better)+'</td><td>'+(imp?'<span style="color:'+(imp.ok?"var(--green)":"var(--red)")+';font-size:12px">'+(imp.ok?"▲":"▼")+imp.pct+'%</span>':"—")+'</td></tr>';
   }).join("");
+
+  // Show-all / collapse row
+  if(!showAll && remaining > 0){
+    tb.innerHTML += '<tr><td colspan="6" style="text-align:center;padding:12px"><button onclick="renderLB(true)" style="font-size:12px;padding:6px 18px;color:var(--gold);background:var(--gold-glow);border-color:rgba(201,168,76,0.3)">Show all '+ranked.length+' students ↓</button></td></tr>';
+  } else if(showAll && ranked.length > 10){
+    tb.innerHTML += '<tr><td colspan="6" style="text-align:center;padding:12px"><button onclick="renderLB(false)" style="font-size:12px;padding:6px 18px;background:none;border-color:var(--border);color:var(--text2)">Show top 10 only ↑</button></td></tr>';
+  }
 }
 
 // ── STUDENT PORTAL ────────────────────────────────────────────
