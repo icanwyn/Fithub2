@@ -159,7 +159,7 @@ var ADMIN_EMAIL   = "chuynh@lasdschools.org";
           <input id="roster-search" placeholder="🔍 Search by name or email…" oninput="renderRoster()" style="font-size:13px;padding:8px 12px;border-radius:8px"/>
           <div class="row" style="flex-wrap:wrap;gap:8px">
             <select id="roster-period" onchange="renderRoster()" style="width:auto"><option value="all">All Periods</option></select>
-            <select id="roster-grade" onchange="renderRoster()" style="width:auto"><option value="all">All Grades</option><option value="9">Grade 9</option><option value="10">Grade 10</option><option value="11">Grade 11</option><option value="12">Grade 12</option></select>
+            <select id="roster-grade" onchange="renderRoster()" style="width:auto"><option value="all">All Grades</option></select>
             <select id="roster-sort" onchange="renderRoster()" style="width:auto">
               <option value="last">A–Z Last Name</option>
               <option value="first">A–Z First Name</option>
@@ -796,6 +796,14 @@ function syncFilters(){
     el.innerHTML='<option value="all">All Periods</option>'+periods.map(function(p){return '<option value="'+p+'">Period '+p+'</option>';}).join("");
     if(cur)el.value=cur;
   });
+  // Grade filter — built from actual student grades, not hardcoded
+  const gradeEl=document.getElementById("roster-grade");
+  if(gradeEl){
+    const cur=gradeEl.value;
+    const grades=[...new Set(students.map(function(s){return s.grade;}))].filter(Boolean).sort(function(a,b){return a-b;});
+    gradeEl.innerHTML='<option value="all">All Grades</option>'+grades.map(function(g){return '<option value="'+g+'">Grade '+g+'</option>';}).join("");
+    if(cur&&grades.includes(+cur))gradeEl.value=cur;
+  }
   ["prog-skill","lb-skill"].forEach(function(id){
     const el=document.getElementById(id);if(!el)return;
     const cur=el.value;
