@@ -355,8 +355,16 @@ tr:hover td{background:rgba(201,168,76,.03)}
           </div>
           <div class="card" style="flex:1;min-width:260px">
             <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:8px">📥 Shared With Me</div>
-            <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Toggle merge to include their students in your leaderboard.</div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Merge to include their students in your roster, progress, and leaderboard. Absorb to permanently take ownership.</div>
             <div id="share-in"></div>
+            <div id="absorb-section" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+              <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:6px">🔄 Absorb Students</div>
+              <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Permanently transfer selected students to your account. You can update their period and grade before absorbing.</div>
+              <select id="absorb-teacher" onchange="loadAbsorbList()" style="width:100%;margin-bottom:10px">
+                <option value="">Select a teacher to absorb from…</option>
+              </select>
+              <div id="absorb-list"></div>
+            </div>
           </div>
         </div>
       </div>
@@ -721,10 +729,16 @@ function getImp(sid, skid) {
   var d = v[v.length-1] - v[0];
   return { pct: (Math.abs(d) / Math.abs(v[0]) * 100).toFixed(1), ok: sk && sk.lower_better ? d < 0 : d > 0 };
 }
+function allStudents() {
+  // Combine own + merged, deduped
+  return students.concat(mergedStudents.filter(function(ms) {
+    return !students.find(function(s) { return s.id === ms.id; });
+  }));
+}
 function getRanked(skid, period) {
   var sk = skills.find(function(s) { return s.id === skid; });
-  var all = students.concat(mergedStudents.filter(function(ms) { return !students.find(function(s) { return s.id === ms.id; }); }));
-  return all.filter(function(s) { return period === "all" || s.period === +period; })
+  return allStudents()
+    .filter(function(s) { return period === "all" || String(s.period) === String(period); })
     .map(function(s) { return Object.assign({}, s, {val: getLast(s.id, skid)}); })
     .filter(function(s) { return s.val !== null; })
     .sort(function(a, b) { return sk && sk.lower_better ? a.val - b.val : b.val - a.val; });
@@ -737,7 +751,7 @@ function isAdmin() {
   return ME && ME.email === ADMIN_EMAIL;
 }
 function syncPeriods(selectIds) {
-  var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
+  var periods = Array.from(new Set(allStudents().map(function(s) { return s.period; }))).sort();
   selectIds.forEach(function(id) {
     var el = document.getElementById(id);
     if (!el) return;
@@ -990,7 +1004,8 @@ function syncFilters() {
 // ── ROSTER ───────────────────────────────────────────────────
 function renderRoster() {
   var period = (document.getElementById("roster-period") || {}).value || "all";
-  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var all = allStudents();
+  var list = period === "all" ? all : all.filter(function(s) { return String(s.period) === String(period); });
   setHTML("roster-count", list.length + " students");
   if (!list.length) {
     setHTML("roster-body", '<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:2rem">No students yet — use CSV Upload or Add Student.</td></tr>');
@@ -1015,7 +1030,7 @@ function renderProgress() {
   var skid   = (document.getElementById("prog-skill")  || {}).value;
   var period = (document.getElementById("prog-period") || {}).value || "all";
   var sk = skills.find(function(s) { return s.id === skid; });
-  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var list = period === "all" ? allStudents() : allStudents().filter(function(s) { return String(s.period) === String(period); });
   if (!list.length || !sk) { setHTML("prog-body", '<tr><td colspan="5" style="text-align:center;color:var(--text2);padding:2rem">No data yet.</td></tr>'); return; }
   setHTML("prog-body", list.map(function(s) {
     var vals = getVals(s.id, skid), imp = getImp(s.id, skid), rank = getRank(s.id, skid);
@@ -1074,8 +1089,8 @@ function renderPortalList() {
   var search = ((document.getElementById("portal-search") || {}).value || "").toLowerCase().trim();
   var period = (document.getElementById("portal-period") || {}).value || "all";
   var sort   = (document.getElementById("portal-sort")   || {}).value || "first";
-  var list = students.filter(function(s) {
-    var mp = period === "all" || s.period === +period;
+  var list = allStudents().filter(function(s) {
+    var mp = period === "all" || String(s.period) === String(period);
     var mn = !search || s.first.toLowerCase().includes(search) || s.last.toLowerCase().includes(search);
     return mp && mn;
   }).sort(function(a, b) {
@@ -2374,6 +2389,178 @@ function getTeacherLabel(teacherId) {
   var s = sharedWithMe.find(function(s) { return s.owner_teacher_id === teacherId; });
   if (s && s._name) return s._name.split(" ")[0];
   return "Colleague";
+}
+
+// ── ABSORB STUDENTS ──────────────────────────────────────────
+function showAbsorbSection() {
+  var sec = document.getElementById("absorb-section");
+  if (!sec) return;
+  var sel = document.getElementById("absorb-teacher");
+  if (!sel) return;
+
+  // Populate with teachers who shared with me and have active merge
+  var active = sharedWithMe.filter(function(s) { return s.active !== false; });
+  if (!active.length) { sec.classList.add("hidden"); return; }
+
+  sec.classList.remove("hidden");
+  sel.innerHTML = '<option value="">Select a teacher to absorb from…</option>' +
+    active.map(function(s) {
+      var tid = s.owner_teacher_id;
+      var t   = s._name || tid;
+      var cnt = mergedStudents.filter(function(ms) { return ms.teacher_id === tid; }).length;
+      return '<option value="' + tid + '">' + t + ' (' + cnt + ' students)</option>';
+    }).join("");
+}
+
+function loadAbsorbList() {
+  var tid = (document.getElementById("absorb-teacher") || {}).value;
+  var el  = document.getElementById("absorb-list");
+  if (!el) return;
+  if (!tid) { el.innerHTML = ""; return; }
+
+  var theirStudents = mergedStudents.filter(function(s) { return s.teacher_id === tid; });
+  if (!theirStudents.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:1rem 0">No students found from this teacher.<br>Make sure they have shared with you and you have merged.</div>';
+    return;
+  }
+
+  el.innerHTML = "";
+
+  // Header row
+  var hdr = document.createElement("div");
+  hdr.style.cssText = "display:grid;grid-template-columns:auto 1fr 80px 80px 80px;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:11px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px";
+  hdr.innerHTML = "<div></div><div>Student</div><div>Grade</div><div>Period</div><div>Select</div>";
+  el.appendChild(hdr);
+
+  theirStudents.sort(function(a,b) { return a.last.localeCompare(b.last); }).forEach(function(s) {
+    var row = document.createElement("div");
+    row.style.cssText = "display:grid;grid-template-columns:auto 1fr 80px 80px 80px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)";
+
+    // Avatar
+    var av = document.createElement("div");
+    av.className = "av";
+    av.style.cssText = avSty(s.first, s.last, 30);
+    av.textContent = s.first[0] + s.last[0];
+
+    // Name
+    var nameDiv = document.createElement("div");
+    nameDiv.innerHTML = '<div style="font-weight:500;font-size:13px">' + s.first + ' ' + s.last + '</div>' +
+      '<div style="font-size:11px;color:var(--text2)">Gr ' + s.grade + ' · P' + s.period + '</div>';
+
+    // New grade input
+    var gradeInput = document.createElement("input");
+    gradeInput.type = "text";
+    gradeInput.id = "abs-grade-" + s.id;
+    gradeInput.value = s.grade || "";
+    gradeInput.placeholder = "Grade";
+    gradeInput.style.cssText = "font-size:13px;padding:6px 8px;text-align:center";
+
+    // New period input
+    var periodInput = document.createElement("input");
+    periodInput.type = "text";
+    periodInput.id = "abs-period-" + s.id;
+    periodInput.value = s.period || "";
+    periodInput.placeholder = "Period";
+    periodInput.style.cssText = "font-size:13px;padding:6px 8px;text-align:center";
+
+    // Checkbox
+    var cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.id = "abs-cb-" + s.id;
+    cb.dataset.sid = s.id;
+    cb.style.cssText = "width:18px;height:18px;accent-color:var(--gold);cursor:pointer;justify-self:center";
+
+    row.appendChild(av);
+    row.appendChild(nameDiv);
+    row.appendChild(gradeInput);
+    row.appendChild(periodInput);
+    row.appendChild(cb);
+    el.appendChild(row);
+  });
+
+  // Select all + Absorb button row
+  var footer = document.createElement("div");
+  footer.style.cssText = "display:flex;gap:8px;margin-top:12px;flex-wrap:wrap";
+
+  var selAll = document.createElement("button");
+  selAll.textContent = "Select All";
+  selAll.style.cssText = "font-size:12px;padding:6px 12px";
+  selAll.onclick = function() {
+    document.querySelectorAll("#absorb-list input[type=checkbox]").forEach(function(cb) { cb.checked = true; });
+  };
+
+  var selNone = document.createElement("button");
+  selNone.textContent = "Clear";
+  selNone.style.cssText = "font-size:12px;padding:6px 12px";
+  selNone.onclick = function() {
+    document.querySelectorAll("#absorb-list input[type=checkbox]").forEach(function(cb) { cb.checked = false; });
+  };
+
+  var absorbBtn = document.createElement("button");
+  absorbBtn.textContent = "⬇ Absorb Selected Students";
+  absorbBtn.className = "gold";
+  absorbBtn.style.cssText = "flex:1;padding:8px;font-size:13px";
+  absorbBtn.onclick = absorbSelected;
+
+  var absorbAlert = document.createElement("div");
+  absorbAlert.id = "absorb-alert";
+  absorbAlert.style.cssText = "width:100%;margin-top:4px";
+
+  footer.appendChild(selAll);
+  footer.appendChild(selNone);
+  footer.appendChild(absorbBtn);
+  footer.appendChild(absorbAlert);
+  el.appendChild(footer);
+}
+
+async function absorbSelected() {
+  var checked = Array.from(document.querySelectorAll("#absorb-list input[type=checkbox]:checked"));
+  if (!checked.length) {
+    var al = document.getElementById("absorb-alert");
+    if (al) al.innerHTML = '<div class="alert a-err">Select at least one student.</div>';
+    return;
+  }
+
+  var btn = document.querySelector("#absorb-list button.gold");
+  if (btn) { btn.disabled = true; btn.textContent = "Absorbing " + checked.length + " students…"; }
+
+  var ok = 0, fail = 0, firstErr = "";
+
+  for (var i = 0; i < checked.length; i++) {
+    var sid     = checked[i].dataset.sid;
+    var newGrade  = (document.getElementById("abs-grade-" + sid)  || {}).value || "";
+    var newPeriod = (document.getElementById("abs-period-" + sid) || {}).value || "";
+
+    var r = await sb.from("students").update({
+      teacher_id: ME.id,
+      grade:      newGrade,
+      period:     newPeriod
+    }).eq("id", sid);
+
+    if (r.error) {
+      fail++;
+      if (!firstErr) firstErr = r.error.message;
+      console.error("Absorb error:", r.error.message, sid);
+    } else {
+      ok++;
+    }
+  }
+
+  if (btn) { btn.disabled = false; btn.textContent = "⬇ Absorb Selected Students"; }
+
+  var al = document.getElementById("absorb-alert");
+  if (fail > 0) {
+    if (al) al.innerHTML = '<div class="alert a-err">' + ok + ' absorbed, ' + fail + ' failed — ' + firstErr + '</div>';
+  } else {
+    if (al) al.innerHTML = '<div class="alert a-ok">✓ ' + ok + ' student' + (ok>1?"s":"") + ' absorbed! They are now in your roster.</div>';
+    // Reload everything
+    mergedStudents = mergedStudents.filter(function(ms) {
+      return !checked.find(function(cb) { return cb.dataset.sid === ms.id; });
+    });
+    await loadData();
+    await loadActiveMerges();
+    loadAbsorbList();
+  }
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
