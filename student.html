@@ -7,16 +7,20 @@
 <title>PE Tracker — Log My Scores</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- QR code generator (for the teacher QR display page) -->
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 <style>
 :root{
-  --navy:#0D1B3E;--navy2:#162248;--navy3:#1E2F5A;
-  --gold:#C9A84C;--gold-lt:#F0D98B;--gold-dk:#9B7A2A;--gold-glow:rgba(201,168,76,0.18);
-  --bg:#09122B;--surface:#162248;--surface2:#1E2F5A;--surface3:#243570;
-  --border:rgba(201,168,76,0.18);--border2:rgba(201,168,76,0.32);
-  --text:#F0E6C8;--text2:#A8B4CC;--text3:#6B7A99;
-  --red:#D4574A;--red-lt:rgba(212,87,74,0.15);
-  --green:#4CAF50;
-  font-family:'DM Sans',sans-serif;
+  --bg:#141928;
+  --surface:linear-gradient(160deg,#ECEDF3,#E2E4EC);
+  --surface2:#DDE0E8;--surface3:#D2D5DF;
+  --navy:#141928;--navy2:#1C2338;--navy3:#252D42;
+  --gold:#C4973F;--gold-lt:#D4AF62;--gold-dk:#9B7028;--gold-glow:rgba(196,151,63,0.18);
+  --silver:#8A96AA;--silver-lt:#A8B4C4;
+  --border:rgba(28,35,56,0.1);--border2:rgba(28,35,56,0.16);
+  --text:#1C2338;--text2:#4A5568;--text3:#8A96AA;
+  --red:#C0392B;--red-lt:rgba(192,57,43,0.1);
+  font-family:-apple-system,'DM Sans','SF Pro Display',BlinkMacSystemFont,sans-serif;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 body{
@@ -25,76 +29,84 @@ body{
                    repeating-linear-gradient(-45deg,rgba(201,168,76,0.03) 0,rgba(201,168,76,0.03) 1px,transparent 1px,transparent 40px);
 }
 input,select{
-  font-family:inherit;font-size:15px;color:var(--text);background:var(--surface2);
-  border:1px solid var(--border2);border-radius:10px;padding:12px 14px;outline:none;width:100%;
+  font-family:inherit;font-size:15px;color:var(--text);
+  background:rgba(28,35,56,0.06);
+  border:1px solid rgba(28,35,56,0.14);
+  border-radius:10px;padding:12px 14px;outline:none;width:100%;
   transition:border-color .15s,box-shadow .15s;
 }
-input::placeholder{color:var(--text3)}
-input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-glow)}
-select option{background:var(--navy2)}
+input::placeholder{color:#A0AABC}
+input:focus,select:focus{border-color:var(--navy2);box-shadow:0 0 0 3px rgba(28,35,56,0.1)}
+select option{background:#E8E9EE;color:var(--text)}
 button{
   font-family:inherit;font-size:15px;font-weight:500;cursor:pointer;
-  border:1px solid var(--border2);border-radius:10px;
-  background:var(--surface2);color:var(--text2);padding:12px 20px;
+  border:1px solid rgba(28,35,56,0.12);border-radius:10px;
+  background:rgba(28,35,56,0.07);color:var(--text2);padding:12px 20px;
   transition:all .15s;width:100%;
 }
-button:hover{background:var(--surface3);color:var(--text);border-color:var(--gold)}
+button:hover{background:var(--navy2);color:#E8EAF2;border-color:var(--navy2)}
 button:active{transform:scale(.98)}
 button.primary{
-  background:linear-gradient(135deg,var(--gold) 0%,var(--gold-dk) 100%);
-  color:#09122B;border-color:var(--gold);font-weight:700;font-size:16px;
+  background:linear-gradient(145deg,#D4AF62,#9B7028);
+  color:#141928;border-color:rgba(212,175,98,0.5);font-weight:700;font-size:16px;
   letter-spacing:.04em;padding:14px;
+  box-shadow:0 4px 16px rgba(196,151,63,0.3);
 }
-button.primary:hover{background:linear-gradient(135deg,var(--gold-lt),var(--gold));box-shadow:0 4px 20px var(--gold-glow)}
+button.primary:hover{background:linear-gradient(145deg,#E0C070,#C4973F);box-shadow:0 6px 24px rgba(196,151,63,0.4)}
 button:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem;box-shadow:0 4px 30px rgba(0,0,0,0.3)}
+.card{background:linear-gradient(160deg,#ECEDF3,#E2E4EC);border:1px solid rgba(28,35,56,0.1);border-radius:16px;padding:1.5rem;box-shadow:0 2px 12px rgba(28,35,56,0.12),inset 0 1px 0 rgba(255,255,255,0.8);position:relative;z-index:1}
 .hidden{display:none!important}
 .badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 10px;border-radius:99px;white-space:nowrap}
-.badge-gold{background:linear-gradient(135deg,#F0D98B,#C9A84C);color:#09122B}
-.badge-silver{background:linear-gradient(135deg,#BEC8D8,#8A96AA);color:#09122B}
-.badge-bronze{background:linear-gradient(135deg,#D4A06A,#A06830);color:#fff}
-.badge-gray{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.badge-gold{background:linear-gradient(145deg,#D4AF62,#9B7028);color:#141928;box-shadow:0 1px 6px rgba(196,151,63,0.35)}
+.badge-silver{background:linear-gradient(145deg,#A8B4C4,#6A7888);color:#141928}
+.badge-bronze{background:linear-gradient(145deg,#C49060,#8B5830);color:#fff}
+.badge-gray{background:rgba(28,35,56,0.08);color:var(--text2);border:1px solid rgba(28,35,56,0.12)}
 .alert{padding:12px 16px;border-radius:10px;font-size:14px;margin-bottom:14px;line-height:1.5;border:1px solid transparent}
-.alert-error{background:var(--red-lt);color:#F0A090;border-color:rgba(212,87,74,0.3)}
-.alert-success{background:var(--gold-glow);color:var(--gold-lt);border-color:rgba(201,168,76,0.3)}
+.alert-error{background:rgba(192,57,43,0.08);color:#A02818;border-color:rgba(192,57,43,0.18)}
+.alert-success{background:rgba(160,120,48,0.1);color:#7A5820;border-color:rgba(160,120,48,0.25)}
 .mono{font-family:'DM Mono',monospace;letter-spacing:.05em}
-.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
+.spinner{width:28px;height:28px;border:2px solid rgba(28,35,56,0.12);border-top-color:var(--navy2);border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
 @keyframes spin{to{transform:rotate(360deg)}}
 .avatar{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;border:1.5px solid var(--border2)}
-#wrap{max-width:480px;margin:0 auto;padding:1.25rem}
+
+/* Page wrapper */
+#wrap{max-width:480px;margin:0 auto;padding:1.25rem;position:relative;z-index:1}
+
+/* Header */
 #top-bar{
-  background:linear-gradient(90deg,var(--navy) 0%,var(--navy2) 100%);
-  border-bottom:1px solid var(--border2);padding:.875rem 1.25rem;
-  display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100;
+  background:linear-gradient(180deg,#252D42,#1C2338);
+  border-bottom:1px solid rgba(255,255,255,0.06);
+  padding:.875rem 1.25rem;
+  display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:100;
   box-shadow:0 2px 20px rgba(0,0,0,0.4);
 }
-#top-bar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+
 label.lbl{display:block;font-size:11px;color:var(--text2);margin-bottom:6px;margin-top:14px;letter-spacing:.06em;text-transform:uppercase;font-weight:500}
 label.lbl:first-child{margin-top:0}
+
+/* Step indicators */
 .steps{display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:1.5rem}
-.step{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);letter-spacing:.04em;text-transform:uppercase}
-.step.active{color:var(--gold)}
-.step-dot{width:24px;height:24px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:var(--surface2);flex-shrink:0}
-.step.active .step-dot{border-color:var(--gold);background:var(--gold-glow);color:var(--gold)}
+.step{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);letter-spacing:.04em;text-transform:uppercase}
+.step.active{color:var(--gold-dk)}
+.step.done{color:var(--text3)}
+.step-dot{width:24px;height:24px;border-radius:50%;border:1.5px solid rgba(28,35,56,0.2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;background:rgba(28,35,56,0.06);flex-shrink:0}
+.step.active .step-dot{border-color:var(--gold);background:rgba(196,151,63,0.15);color:var(--gold-dk)}
 .step.done .step-dot{border-color:var(--text3);background:var(--surface2)}
 .step-line{width:32px;height:1px;background:var(--border);flex-shrink:0}
-.rank-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:10px;margin-bottom:8px;border:1px solid var(--border)}
 
-/* Tab bar for score screen */
-.tab-row{display:flex;gap:3px;background:var(--surface2);padding:4px;border-radius:10px;margin-bottom:1rem;border:1px solid var(--border)}
-.tab-btn{flex:1;padding:8px 6px;border:none;background:transparent;color:var(--text3);border-radius:7px;font-size:12px;letter-spacing:.03em;text-transform:uppercase;font-weight:500;width:auto;cursor:pointer}
-.tab-btn.active{background:var(--gold-glow);color:var(--gold);box-shadow:inset 0 0 0 1px rgba(201,168,76,0.35);font-weight:600}
+/* Number input — big for iPad */
+input[type=number]{font-size:22px;text-align:center;padding:14px;font-weight:500}
 
-/* Goal progress bar */
-.goal-bar-wrap{height:6px;background:var(--border2);border-radius:99px;overflow:hidden;margin-top:6px}
-.goal-bar-fill{height:6px;border-radius:99px;background:linear-gradient(90deg,var(--gold-dk),var(--gold));transition:width .4s}
+/* Rank pill */
+.rank-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:rgba(28,35,56,0.06);border-radius:10px;margin-bottom:8px;border:1px solid rgba(28,35,56,0.1)}
 </style>
 </head>
 <body>
 
 <!-- TOP BAR -->
 <div id="top-bar">
-  <div style="width:34px;height:34px;border-radius:8px;background:var(--gold-glow);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏆</div>
+  <div style="width:34px;height:34px;background:linear-gradient(145deg,#D4AF62,#9B7028);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;box-shadow:0 2px 10px rgba(196,151,63,0.3)">🏆</div>
   <div>
     <div style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:16px;color:var(--gold);letter-spacing:.08em">PE PROGRESS TRACKER</div>
     <div id="teacher-label" style="font-size:11px;color:var(--text2);letter-spacing:.04em">Loading…</div>
@@ -106,7 +118,7 @@ label.lbl:first-child{margin-top:0}
   <!-- LOADING -->
   <div id="screen-loading"><div class="spinner"></div></div>
 
-  <!-- ERROR -->
+  <!-- ERROR (bad URL / teacher not found) -->
   <div id="screen-error" class="hidden" style="text-align:center;padding:3rem 1rem">
     <div style="font-size:40px;margin-bottom:12px">⚠️</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--gold);margin-bottom:8px">Invalid Link</div>
@@ -117,25 +129,35 @@ label.lbl:first-child{margin-top:0}
   <div id="screen-select" class="hidden">
     <div style="font-family:'Cormorant Garamond',serif;font-size:24px;font-weight:700;color:var(--gold);margin-bottom:4px;text-align:center">Log Your Scores</div>
     <div style="font-size:13px;color:var(--text2);text-align:center;margin-bottom:20px">Find your name and enter your code</div>
+
+    <!-- Steps -->
     <div class="steps" style="margin-bottom:20px">
       <div class="step active"><div class="step-dot">1</div><span>Name</span></div>
       <div class="step-line"></div>
-      <div class="step"><div class="step-dot">2</div><span>Verify</span></div>
+      <div class="step" id="step2-ind"><div class="step-dot">2</div><span>Verify</span></div>
       <div class="step-line"></div>
-      <div class="step"><div class="step-dot">3</div><span>Scores</span></div>
+      <div class="step" id="step3-ind"><div class="step-dot">3</div><span>Scores</span></div>
     </div>
+
+    <!-- Search + filters -->
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px">
       <input id="s-search" placeholder="🔍 Type your name…" oninput="filterStudents()" style="font-size:16px;padding:13px 16px;border-radius:12px"/>
       <div style="display:flex;gap:8px">
-        <select id="s-period" onchange="filterStudents()" style="flex:1;width:auto"><option value="all">All Periods</option></select>
+        <select id="s-period" onchange="filterStudents()" style="flex:1;width:auto">
+          <option value="all">All Periods</option>
+        </select>
         <select id="s-sort" onchange="filterStudents()" style="flex:1;width:auto">
           <option value="first">By First Name</option>
           <option value="last">By Last Name</option>
         </select>
       </div>
     </div>
+
+    <!-- Alpha jump -->
     <div id="s-alpha" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px"></div>
     <div id="s-count" style="font-size:12px;color:var(--text3);margin-bottom:10px"></div>
+
+    <!-- Student list -->
     <div id="s-list" style="display:flex;flex-direction:column;gap:8px;max-height:62vh;overflow-y:auto;padding-right:2px"></div>
   </div>
 
@@ -146,14 +168,14 @@ label.lbl:first-child{margin-top:0}
       <div class="step-line"></div>
       <div class="step active"><div class="step-dot">2</div><span>Verify</span></div>
       <div class="step-line"></div>
-      <div class="step"><div class="step-dot">3</div><span>Scores</span></div>
+      <div class="step" id="step3-ind2"><div class="step-dot">3</div><span>Scores</span></div>
     </div>
     <div class="card">
       <button onclick="goBack('select')" style="width:auto;padding:6px 14px;font-size:13px;margin-bottom:18px;background:none;border-color:var(--border);color:var(--text2)">← Back</button>
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px">
         <div id="v2-avatar" class="avatar" style="width:54px;height:54px;font-size:18px;flex-shrink:0"></div>
         <div>
-          <div id="v2-name" style="font-weight:600;font-size:18px"></div>
+          <div id="v2-name" style="font-weight:600;font-size:18px;color:var(--text)"></div>
           <div id="v2-sub" style="font-size:13px;color:var(--text2)"></div>
         </div>
       </div>
@@ -165,7 +187,7 @@ label.lbl:first-child{margin-top:0}
     </div>
   </div>
 
-  <!-- STEP 3: SCORES / PROGRESS / GOALS -->
+  <!-- STEP 3: LOG SCORES -->
   <div id="screen-scores" class="hidden">
     <div class="steps" style="margin-bottom:20px">
       <div class="step done"><div class="step-dot">✓</div><span>Name</span></div>
@@ -185,63 +207,23 @@ label.lbl:first-child{margin-top:0}
       <button onclick="goBack('select')" style="width:auto;padding:6px 12px;font-size:12px;background:none;border-color:var(--border);color:var(--text2)">Switch</button>
     </div>
 
-    <!-- Tab bar -->
-    <div class="tab-row">
-      <button class="tab-btn active" id="tab-log"         onclick="setTab('log')">📋 Log Scores</button>
-      <button class="tab-btn"        id="tab-progress"    onclick="setTab('progress')">📈 Progress</button>
-      <button class="tab-btn"        id="tab-goals"       onclick="setTab('goals')">🎯 Goals</button>
-      <button class="tab-btn"        id="tab-leaderboard" onclick="setTab('leaderboard')">🏆 Leaders</button>
+    <!-- Week label -->
+    <div style="text-align:center;margin-bottom:16px">
+      <span id="week-label" style="font-size:12px;color:var(--text3);background:var(--surface2);padding:4px 14px;border-radius:99px;border:1px solid var(--border)"></span>
     </div>
 
-    <!-- TAB: LOG SCORES -->
-    <div id="pane-log">
-      <div style="text-align:center;margin-bottom:16px">
-        <span id="week-label" style="font-size:12px;color:var(--text3);background:var(--surface2);padding:4px 14px;border-radius:99px;border:1px solid var(--border)"></span>
-      </div>
-      <div class="card" style="margin-bottom:14px">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:14px">📋 This Week's Scores</div>
-        <div id="score-fields"></div>
-        <div id="score-alert" style="margin-top:10px"></div>
-        <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save My Scores ✓</button>
-      </div>
+    <!-- Score entry -->
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:14px">📋 This Week's Scores</div>
+      <div id="score-fields"></div>
+      <div id="score-alert" style="margin-top:10px"></div>
+      <button class="primary" id="submit-btn" onclick="submitScores()" style="margin-top:14px">Save My Scores ✓</button>
     </div>
 
-    <!-- TAB: PROGRESS -->
-    <div id="pane-progress" class="hidden">
-      <div class="card">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:14px">📈 My Progress</div>
-        <div id="my-progress"></div>
-      </div>
-    </div>
-
-    <!-- TAB: GOALS -->
-    <div id="pane-goals" class="hidden">
-      <div class="card">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:4px">🎯 My Goals</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Set a target for each skill. Your progress is tracked automatically.</div>
-        <div id="goal-fields"></div>
-        <div id="goals-alert" style="margin-top:10px"></div>
-        <button class="primary" onclick="saveGoals()" style="margin-top:14px">Save Goals ✓</button>
-        <div id="goal-progress-section" style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
-          <div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Goal Progress</div>
-          <div id="goal-progress-list"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: LEADERBOARD -->
-    <div id="pane-leaderboard" class="hidden">
-      <!-- Skill selector -->
-      <div style="margin-bottom:14px">
-        <select id="lb-skill-select" onchange="renderStudentLB()" style="font-size:14px;padding:10px 14px;border-radius:10px"></select>
-      </div>
-      <div id="lb-podium-student" style="display:flex;align-items:flex-end;justify-content:center;gap:8px;margin-bottom:16px"></div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <div id="lb-list-student"></div>
-      </div>
-      <div style="font-size:12px;color:var(--text3);text-align:center;margin-top:12px;padding:0 1rem">
-        Showing top 10 · Log your scores to climb the leaderboard!
-      </div>
+    <!-- My progress -->
+    <div class="card">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:14px">📈 My Progress</div>
+      <div id="my-progress"></div>
     </div>
   </div>
 
@@ -254,230 +236,92 @@ label.lbl:first-child{margin-top:0}
       <div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Your Rankings</div>
       <div id="success-ranks"></div>
     </div>
-    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-      <button onclick="showScoresScreen()" style="background:none;border-color:var(--border);color:var(--text2);width:auto;padding:8px 20px;font-size:13px">📈 My Progress</button>
-      <button onclick="showLeaderboard()" style="background:linear-gradient(135deg,var(--gold),var(--gold-dk));color:#09122B;border-color:var(--gold);font-weight:600;width:auto;padding:8px 20px;font-size:13px">🏆 See Leaderboard</button>
-      <button onclick="goBack('select')" style="background:none;border-color:var(--border);color:var(--text2);width:auto;padding:8px 20px;font-size:13px">Switch Student</button>
-    </div>
+    <button onclick="goBack('select')" style="background:none;border-color:var(--border);color:var(--text2);width:auto;padding:8px 20px;font-size:13px">Done — Switch Student</button>
   </div>
 
 </div><!-- /wrap -->
 
 <script>
-var SUPABASE_URL = "https://vsycqimhkzppautumsyo.supabase.co";
-var SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzeWNxaW1oa3pwcGF1dHVtc3lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MTMyMjEsImV4cCI6MjA5MzM4OTIyMX0.upBxit5d5nA6b9oVy8CbxIbzpO2m7_Df27IgKjg3l2k";
-var sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ── Config ────────────────────────────────────────────────────
+const SUPABASE_URL = "https://vsycqimhkzppautumsyo.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzeWNxaW1oa3pwcGF1dHVtc3lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MTMyMjEsImV4cCI6MjA5MzM4OTIyMX0.upBxit5d5nA6b9oVy8CbxIbzpO2m7_Df27IgKjg3l2k";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── State ─────────────────────────────────────────────────────
-var teacherId = null;
-var teacherInfo = null;
-var students = [];
-var skills = [];
-var entries = {};        // { studentId: { skillId: [val, val, …] } }
-var studentGoals = {};   // { studentId: { skillId: targetValue } }
-var selectedStudent = null;
+let teacherId = null;
+let teacherInfo = null;
+let students = [];
+let skills = [];
+let entries = {};
+let selectedStudent = null;
 
-// ── URL params ────────────────────────────────────────────────
-var params = new URLSearchParams(window.location.search);
+// ── Read teacher ID from URL ──────────────────────────────────
+// URL format: student.html?t=TEACHER_ID
+// OR:         student.html?t=TEACHER_ID&p=2  (filter to period 2)
+const params = new URLSearchParams(window.location.search);
 teacherId = params.get("t");
-var urlPeriod = params.get("p");
+const urlPeriod = params.get("p"); // optional period pre-filter
 
 // ── Avatar ────────────────────────────────────────────────────
-var AB=["#1E2F5A","#243570","#162248","#1A2850","#0D1B3E","#243060"];
-var AT=["#C9A84C","#F0D98B","#C9A84C","#F0D98B","#C9A84C","#F0D98B"];
-function avStyle(f,l,sz){var h=(f.charCodeAt(0)*7+l.charCodeAt(0)*13)%6;return "width:"+sz+"px;height:"+sz+"px;background:"+AB[h]+";color:"+AT[h]+";font-size:"+Math.round(sz*.38)+"px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;border:1.5px solid rgba(201,168,76,0.25)";}
-function avHTML(f,l,sz){sz=sz||36;return '<div class="avatar" style="'+avStyle(f,l,sz)+'">'+f[0]+l[0]+'</div>';}
+const AB=["#1E2F5A","#243570","#162248","#1A2850","#0D1B3E","#243060"];
+const AT=["#C9A84C","#F0D98B","#C9A84C","#F0D98B","#C9A84C","#F0D98B"];
+function avStyle(f,l,sz){const h=(f.charCodeAt(0)*7+l.charCodeAt(0)*13)%6;return `width:${sz}px;height:${sz}px;background:${AB[h]};color:${AT[h]};font-size:${Math.round(sz*.38)}px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0;border:1.5px solid rgba(201,168,76,0.25)`;}
+function avHTML(f,l,sz=36){return `<div class="avatar" style="${avStyle(f,l,sz)}">${f[0]}${l[0]}</div>`;}
 
 // ── Helpers ───────────────────────────────────────────────────
-function show(id){
-  ["screen-loading","screen-error","screen-select","screen-verify","screen-scores","screen-success"].forEach(function(s){
-    var el=document.getElementById(s);if(el)el.classList.add("hidden");
-  });
-  var el=document.getElementById(id);if(el)el.classList.remove("hidden");
-}
-function getEntries(sid,skid){return (entries[sid]&&entries[sid][skid])||[];}
-function getVals(sid,skid){return getEntries(sid,skid).map(function(e){return e.value;});}
-function getLastVal(sid,skid){var v=getVals(sid,skid);return v.length?v[v.length-1]:null;}
-function getImp(sid,skid){
-  var v=getVals(sid,skid);if(v.length<2)return null;
-  var sk=skills.find(function(s){return s.id===skid;});
-  var d=v[v.length-1]-v[0];
-  return{pct:((Math.abs(d)/Math.abs(v[0]))*100).toFixed(1),ok:sk?sk.lower_better?d<0:d>0:d>0};
-}
-function getRanked(skid){
-  var sk=skills.find(function(s){return s.id===skid;});
-  return students.map(function(s){return Object.assign({},s,{val:getLastVal(s.id,skid)});})
-    .filter(function(s){return s.val!==null;})
-    .sort(function(a,b){return sk&&sk.lower_better?a.val-b.val:b.val-a.val;});
-}
-function getRank(sid,skid){var i=getRanked(skid).findIndex(function(s){return s.id===sid;});return i===-1?null:i+1;}
-function rankBadge(r){
-  if(!r)return "";
-  if(r===1)return '<span class="badge badge-gold">🥇 #1</span>';
-  if(r===2)return '<span class="badge badge-silver">🥈 #2</span>';
-  if(r===3)return '<span class="badge badge-bronze">🥉 #3</span>';
-  if(r<=10)return '<span class="badge badge-gray">Top 10</span>';
-  return ""; // outside top 10 — show nothing
-}
-
-// ── Tab switching ─────────────────────────────────────────────
-function setTab(t){
-  ["log","progress","goals","leaderboard"].forEach(function(id){
-    var p=document.getElementById("pane-"+id);if(p)p.classList.toggle("hidden",id!==t);
-    var b=document.getElementById("tab-"+id);if(b)b.classList.toggle("active",id===t);
-  });
-  if(t==="progress")renderProgress();
-  if(t==="goals")renderGoals();
-  if(t==="leaderboard")renderStudentLB();
-}
-
-// ── STUDENT LEADERBOARD ───────────────────────────────────────
-function renderStudentLB(){
-  // Populate skill selector if needed
-  var sel=document.getElementById("lb-skill-select");
-  if(sel&&sel.options.length===0){
-    skills.forEach(function(sk){
-      var o=document.createElement("option");
-      o.value=sk.id;o.textContent=sk.name;
-      sel.appendChild(o);
-    });
-  }
-  if(!sel||!sel.value)return;
-  var skid=sel.value;
-  var sk=skills.find(function(s){return s.id===skid;});
-  if(!sk)return;
-
-  var ranked=students
-    .map(function(s){return {id:s.id,first:s.first,last:s.last,period:s.period,val:getLastVal(s.id,skid)};})
-    .filter(function(s){return s.val!==null;})
-    .sort(function(a,b){return sk.lower_better?a.val-b.val:b.val-a.val;});
-
-  var myRank=ranked.findIndex(function(s){return s.id===selectedStudent.id;})+1;
-  var top10=ranked.slice(0,10);
-  var iAmInTop10=myRank>=1&&myRank<=10;
-
-  // Mini podium (top 3)
-  var podEl=document.getElementById("lb-podium-student");
-  if(ranked.length>=1){
-    var order=[ranked[1],ranked[0],ranked[2]].filter(Boolean);
-    var hts=[60,84,48],rnks=[2,1,3];
-    var mdls=["badge-silver","badge-gold","badge-bronze"];
-    var labels=["2nd","1st","3rd"];
-    podEl.innerHTML=order.map(function(s,i){
-      var isMe=s.id===selectedStudent.id;
-      return '<div style="display:flex;flex-direction:column;align-items:center;flex:1;max-width:130px">'
-        +avHTML(s.first,s.last,rnks[i]===1?44:34)
-        +'<div style="font-weight:600;font-size:'+(rnks[i]===1?14:12)+'px;margin:5px 0 2px;color:'+(isMe?"var(--gold)":"var(--text)")+'">'+s.first+(isMe?" ⭐":"")+'</div>'
-        +'<div style="font-size:11px;color:var(--text2);margin-bottom:5px">'+s.val+' '+sk.unit+'</div>'
-        +'<span class="badge '+mdls[i]+'">'+labels[i]+'</span>'
-        +'<div style="width:100%;height:'+hts[i]+'px;background:'+(rnks[i]===1?"rgba(201,168,76,0.15)":"var(--surface2)")+';border-radius:6px 6px 0 0;margin-top:6px;display:flex;align-items:center;justify-content:center;border:1px solid var(--border)">'
-        +'<span style="font-size:'+(rnks[i]===1?20:14)+'px;font-weight:700;color:'+(rnks[i]===1?"var(--gold)":"var(--text2)")+'">#'+rnks[i]+'</span>'
-        +'</div></div>';
-    }).join("");
-  } else {
-    podEl.innerHTML="";
-  }
-
-  // Top 10 list
-  var listEl=document.getElementById("lb-list-student");
-  if(!top10.length){
-    listEl.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">No scores yet for this skill. Be the first!</div>';
-    return;
-  }
-
-  var rows=top10.map(function(s,i){
-    var isMe=s.id===selectedStudent.id;
-    var imp=getImp(s.id,skid);
-    var medal=i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
-    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);background:'+(isMe?"rgba(201,168,76,0.08)":"transparent")+'">'
-      +'<div style="width:28px;text-align:center;font-size:'+(medal?16:13)+'px;font-weight:700;color:'+(isMe?"var(--gold)":"var(--text3)")+';flex-shrink:0">'+(medal||("#"+(i+1)))+'</div>'
-      +avHTML(s.first,s.last,32)
-      +'<div style="flex:1">'
-      +'<div style="font-weight:'+(isMe?700:500)+';font-size:14px;color:'+(isMe?"var(--gold)":"var(--text)")+'">'+s.first+' '+s.last+(isMe?' <span style="font-size:11px;background:var(--gold-glow);color:var(--gold);padding:1px 7px;border-radius:99px;border:1px solid rgba(201,168,76,0.3)">You</span>':"")+'</div>'
-      +'<div style="font-size:12px;color:var(--text2)">Period '+s.period+'</div>'
-      +'</div>'
-      +'<div style="text-align:right">'
-      +'<div style="font-weight:600;font-size:15px">'+s.val+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+sk.unit+'</span></div>'
-      +(imp?'<div style="font-size:11px;color:'+(imp.ok?"var(--gold)":"var(--red)")+'">'+(imp.ok?"▲":"▼")+imp.pct+'%</div>':"")
-      +'</div>'
-      +'</div>';
-  }).join("");
-
-  // If student is outside top 10, append their row at the bottom with a divider
-  if(!iAmInTop10&&myRank>0){
-    var me=ranked[myRank-1];
-    var myImp=getImp(selectedStudent.id,skid);
-    rows+='<div style="padding:8px 16px;background:var(--surface2);border-bottom:1px solid var(--border)">'
-      +'<div style="font-size:11px;color:var(--text3);text-align:center">· · ·</div>'
-      +'</div>'
-      +'<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:rgba(201,168,76,0.08)">'
-      +'<div style="width:28px;text-align:center;font-size:13px;font-weight:700;color:var(--gold);flex-shrink:0">You</div>'
-      +avHTML(selectedStudent.first,selectedStudent.last,32)
-      +'<div style="flex:1">'
-      +'<div style="font-weight:700;font-size:14px;color:var(--gold)">'+selectedStudent.first+' '+selectedStudent.last+' <span style="font-size:11px;background:var(--gold-glow);color:var(--gold);padding:1px 7px;border-radius:99px;border:1px solid rgba(201,168,76,0.3)">You</span></div>'
-      +'<div style="font-size:12px;color:var(--text2)">Keep going — '+(myRank-10)+' spots to top 10!</div>'
-      +'</div>'
-      +'<div style="text-align:right">'
-      +(me?'<div style="font-weight:600;font-size:15px">'+me.val+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+sk.unit+'</span></div>':"")
-      +(myImp?'<div style="font-size:11px;color:'+(myImp.ok?"var(--gold)":"var(--red)")+'">'+(myImp.ok?"▲":"▼")+myImp.pct+'%</div>':"")
-      +'</div>'
-      +'</div>';
-  } else if(myRank===0){
-    // Student hasn't logged this skill yet
-    rows+='<div style="padding:14px 16px;background:rgba(201,168,76,0.05);border-top:1px solid var(--border);text-align:center;font-size:13px;color:var(--text2)">'
-      +'Log your '+sk.name+' score to appear on the leaderboard!'
-      +'</div>';
-  }
-
-  listEl.innerHTML=rows;
-}
+function alert$(id,msg,type="error"){const el=document.getElementById(id);if(el)el.innerHTML=msg?`<div class="alert alert-${type}">${msg}</div>`:"";}
+function show(id){document.querySelectorAll("#screen-loading,#screen-error,#screen-select,#screen-verify,#screen-scores,#screen-success").forEach(el=>el.classList.add("hidden"));document.getElementById(id)?.classList.remove("hidden");}
+function getVals(sid,skid){return entries[sid]?.[skid]||[];}
+function getLastVal(sid,skid){const v=getVals(sid,skid);return v.length?v[v.length-1]:null;}
+function getImp(sid,skid){const v=getVals(sid,skid);if(v.length<2)return null;const sk=skills.find(s=>s.id===skid);const d=v[v.length-1]-v[0];return{pct:((Math.abs(d)/Math.abs(v[0]))*100).toFixed(1),ok:sk?.lower_better?d<0:d>0};}
+function getRanked(skid){const sk=skills.find(s=>s.id===skid);return students.map(s=>({...s,val:getLastVal(s.id,skid)})).filter(s=>s.val!==null).sort((a,b)=>sk?.lower_better?a.val-b.val:b.val-a.val);}
+function getRank(sid,skid){const i=getRanked(skid).findIndex(s=>s.id===sid);return i===-1?null:i+1;}
+function rankBadge(r,total){if(!r)return "";if(r===1)return '<span class="badge badge-gold">🥇 #1</span>';if(r===2)return '<span class="badge badge-silver">🥈 #2</span>';if(r===3)return '<span class="badge badge-bronze">🥉 #3</span>';return `<span class="badge badge-gray">#${r} of ${total}</span>`;}
 
 // ── BOOT ──────────────────────────────────────────────────────
-(async function(){
+(async()=>{
   if(!teacherId){
     document.getElementById("error-msg").textContent="No teacher ID in URL. Scan your teacher's QR code.";
-    show("screen-error");return;
+    show("screen-error"); return;
   }
 
-  var r1=await sb.from("teachers").select("*").eq("id",teacherId).single();
-  if(r1.error||!r1.data){show("screen-error");return;}
-  teacherInfo=r1.data;
-  document.getElementById("teacher-label").textContent=(teacherInfo.name||"PE Class")+(teacherInfo.school?" · "+teacherInfo.school:"");
-  document.title="Log Scores — "+(teacherInfo.name||"PE Tracker");
+  // Load teacher info
+  const{data:teacher,error:te}=await sb.from("teachers").select("*").eq("id",teacherId).single();
+  if(te||!teacher){show("screen-error");return;}
+  teacherInfo=teacher;
+  document.getElementById("teacher-label").textContent=`${teacher.name||"PE Class"} · ${teacher.school||""}`;
+  document.title=`Log Scores — ${teacher.name||"PE Tracker"}`;
 
-  var r2=await sb.from("students").select("*").eq("teacher_id",teacherId).order("last");
-  students=r2.data||[];
+  // Load students
+  const{data:studs}=await sb.from("students").select("*").eq("teacher_id",teacherId).order("last");
+  students=studs||[];
 
-  var r3=await sb.from("skills").select("*").eq("teacher_id",teacherId).order("created_at");
-  skills=r3.data||[];
+  // Load skills
+  const{data:skls}=await sb.from("skills").select("*").eq("teacher_id",teacherId).order("created_at");
+  skills=skls||[];
 
-  // Load entries — store full objects {value, logged_at, week_label} for history view
+  // Load entries
   if(students.length){
-    var ids=students.map(function(s){return s.id;});
-    var r4=await sb.from("entries").select("*").in("student_id",ids).order("logged_at");
-    (r4.data||[]).forEach(function(e){
+    const ids=students.map(s=>s.id);
+    const{data:ents}=await sb.from("entries").select("*").in("student_id",ids).order("logged_at");
+    (ents||[]).forEach(e=>{
       if(!entries[e.student_id])entries[e.student_id]={};
       if(!entries[e.student_id][e.skill_id])entries[e.student_id][e.skill_id]=[];
-      entries[e.student_id][e.skill_id].push({
-        value: Number(e.value),
-        logged_at: e.logged_at,
-        week_label: e.week_label||""
-      });
+      entries[e.student_id][e.skill_id].push(Number(e.value));
     });
   }
 
-  // Load goals from students.goals JSONB column
-  students.forEach(function(s){
-    if(s.goals&&typeof s.goals==="object"){
-      studentGoals[s.id]=s.goals;
-    }
-  });
+  // Pre-fill period filter from URL param
+  if(urlPeriod){
+    const pf=document.getElementById("s-period");
+    // populate first then set
+  }
 
-  // Period dropdown
-  var periods=[...new Set(students.map(function(s){return s.period;}))].sort();
-  var pf=document.getElementById("s-period");
-  periods.forEach(function(p){var o=document.createElement("option");o.value=p;o.textContent="Period "+p;pf.appendChild(o);});
-  if(urlPeriod&&periods.includes(+urlPeriod))pf.value=urlPeriod;
+  // Populate period dropdown
+  const periods=[...new Set(students.map(s=>s.period))].sort();
+  const pf=document.getElementById("s-period");
+  periods.forEach(p=>{const o=document.createElement("option");o.value=p;o.textContent="Period "+p;pf.appendChild(o);});
+  if(urlPeriod && periods.includes(+urlPeriod)) pf.value=urlPeriod;
 
   filterStudents();
   show("screen-select");
@@ -485,67 +329,83 @@ function renderStudentLB(){
 
 // ── FILTER / RENDER STUDENT LIST ──────────────────────────────
 function filterStudents(){
-  var search=(document.getElementById("s-search")&&document.getElementById("s-search").value||"").toLowerCase().trim();
-  var period=document.getElementById("s-period")&&document.getElementById("s-period").value||"all";
-  var sort=document.getElementById("s-sort")&&document.getElementById("s-sort").value||"first";
+  const search=(document.getElementById("s-search")?.value||"").toLowerCase().trim();
+  const period=document.getElementById("s-period")?.value||"all";
+  const sort=document.getElementById("s-sort")?.value||"first";
 
-  var list=students.filter(function(s){
-    return (period==="all"||s.period===+period)&&(!search||s.first.toLowerCase().includes(search)||s.last.toLowerCase().includes(search));
+  let list=students.filter(s=>{
+    const mp=period==="all"||s.period===+period;
+    const mn=!search||s.first.toLowerCase().includes(search)||s.last.toLowerCase().includes(search);
+    return mp&&mn;
   });
-  list=[...list].sort(function(a,b){return sort==="last"?a.last.localeCompare(b.last)||a.first.localeCompare(b.first):a.first.localeCompare(b.first)||a.last.localeCompare(b.last);});
+  list=[...list].sort((a,b)=>sort==="last"?a.last.localeCompare(b.last)||a.first.localeCompare(b.first):a.first.localeCompare(b.first)||a.last.localeCompare(b.last));
 
-  var c=document.getElementById("s-count");
+  // Count
+  const c=document.getElementById("s-count");
   if(c)c.textContent=list.length===0?"No students found":list.length+" student"+(list.length!==1?"s":"");
 
-  var alphaEl=document.getElementById("s-alpha");
+  // Alpha bar
+  const alphaEl=document.getElementById("s-alpha");
   if(alphaEl){
-    var letters=[...new Set(list.map(function(s){return (sort==="last"?s.last:s.first)[0].toUpperCase();}))].sort();
-    alphaEl.innerHTML=letters.map(function(l){return '<button onclick="jumpTo(\''+l+'\')" style="min-width:30px;height:30px;padding:0;border-radius:7px;font-size:12px;font-weight:600;background:var(--gold-glow);color:var(--gold);border:1px solid rgba(201,168,76,0.25);cursor:pointer;width:auto">'+l+'</button>';}).join("");
+    const letters=[...new Set(list.map(s=>(sort==="last"?s.last:s.first)[0].toUpperCase()))].sort();
+    alphaEl.innerHTML=letters.map(l=>`<button onclick="jumpTo('${l}')" style="min-width:30px;height:30px;padding:0;border-radius:7px;font-size:12px;font-weight:600;background:rgba(28,35,56,0.08);color:var(--navy2);border:1px solid rgba(28,35,56,0.14);cursor:pointer;width:auto">${l}</button>`).join("");
   }
 
-  var el=document.getElementById("s-list");
-  if(!list.length){el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:14px">No students found.</div>';return;}
+  const el=document.getElementById("s-list");
+  if(!list.length){el.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:14px">No students found.<br>Try a different search or period.</div>`;return;}
 
-  var lastLetter="";
-  el.innerHTML=list.map(function(s){
-    var key=(sort==="last"?s.last:s.first)[0].toUpperCase();
-    var header=key!==lastLetter?(lastLetter=key,'<div data-letter="'+key+'" style="font-size:11px;font-weight:700;color:var(--gold);padding:10px 4px 4px;letter-spacing:.1em;opacity:.7">'+key+'</div>'):"";
-    var rank1=skills.length?getRank(s.id,skills[0].id):null;
-    return header+'<button onclick="selectStudent(\''+s.id+'\')" style="display:flex;align-items:center;gap:14px;padding:13px 14px;text-align:left;border-radius:12px;width:100%;border:1px solid var(--border);background:var(--surface2)">'+avHTML(s.first,s.last,42)+'<div style="flex:1"><div style="font-weight:600;font-size:15px">'+s.first+' '+s.last+'</div><div style="font-size:12px;color:var(--text2);margin-top:2px">Grade '+s.grade+' · Period '+s.period+'</div></div><div style="text-align:right">'+(rank1===1?'<div style="font-size:18px">🥇</div>':"")+'<div style="font-size:16px;color:var(--text3)">›</div></div></button>';
+  let lastLetter="";
+  el.innerHTML=list.map(s=>{
+    const key=(sort==="last"?s.last:s.first)[0].toUpperCase();
+    const header=key!==lastLetter?(lastLetter=key,`<div data-letter="${key}" style="font-size:11px;font-weight:700;color:var(--gold);padding:10px 4px 4px;letter-spacing:.1em;opacity:.7">${key}</div>`):"";
+    const rank1=skills.length?getRank(s.id,skills[0].id):null;
+    return header+`
+      <button onclick="selectStudent('${s.id}')" style="display:flex;align-items:center;gap:14px;padding:13px 14px;text-align:left;border-radius:12px;width:100%;border:1px solid var(--border);background:var(--surface2)">
+        ${avHTML(s.first,s.last,42)}
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:15px">${s.first} ${s.last}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:2px">Grade ${s.grade} · Period ${s.period}</div>
+        </div>
+        <div style="text-align:right">
+          ${rank1===1?'<div style="font-size:18px">🥇</div>':''}
+          <div style="font-size:16px;color:var(--text3)">›</div>
+        </div>
+      </button>`;
   }).join("");
 }
 
 function jumpTo(letter){
-  var el=document.getElementById("s-list");
-  var target=el&&el.querySelector('[data-letter="'+letter+'"]');
+  const el=document.getElementById("s-list");
+  const target=el?.querySelector(`[data-letter="${letter}"]`);
   if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
 }
 
 // ── SELECT + VERIFY ───────────────────────────────────────────
 function selectStudent(id){
-  selectedStudent=students.find(function(s){return s.id===id;});
+  selectedStudent=students.find(s=>s.id===id);
   if(!selectedStudent)return;
-  var av=document.getElementById("v2-avatar");
+
+  // Populate verify screen
+  const av=document.getElementById("v2-avatar");
   av.style.cssText=avStyle(selectedStudent.first,selectedStudent.last,54);
   av.textContent=selectedStudent.first[0]+selectedStudent.last[0];
-  document.getElementById("v2-name").textContent=selectedStudent.first+" "+selectedStudent.last;
-  document.getElementById("v2-sub").textContent="Grade "+selectedStudent.grade+" · Period "+selectedStudent.period;
+  document.getElementById("v2-name").textContent=`${selectedStudent.first} ${selectedStudent.last}`;
+  document.getElementById("v2-sub").textContent=`Grade ${selectedStudent.grade} · Period ${selectedStudent.period}`;
   document.getElementById("v2-code").value="";
   document.getElementById("v2-error").classList.add("hidden");
   show("screen-verify");
-  setTimeout(function(){var el=document.getElementById("v2-code");if(el)el.focus();},300);
+  setTimeout(()=>document.getElementById("v2-code").focus(),300);
 }
 
 function verifyCode(){
-  var code=document.getElementById("v2-code").value.trim();
-  var err=document.getElementById("v2-error");
+  const code=document.getElementById("v2-code").value.trim();
+  const err=document.getElementById("v2-error");
   if(code.toLowerCase()===selectedStudent.access_code.toLowerCase()){
     err.classList.add("hidden");
     loadScoreScreen();
     show("screen-scores");
-    setTab("log");
   } else {
-    err.textContent="Incorrect code. Check your card and try again.";
+    err.textContent="Incorrect code. Check your student card and try again.";
     err.classList.remove("hidden");
     document.getElementById("v2-code").value="";
     document.getElementById("v2-code").focus();
@@ -554,221 +414,101 @@ function verifyCode(){
 
 // ── SCORE SCREEN ──────────────────────────────────────────────
 function loadScoreScreen(){
-  var s=selectedStudent;
-  var av=document.getElementById("d-avatar");
+  const s=selectedStudent;
+  const av=document.getElementById("d-avatar");
   av.style.cssText=avStyle(s.first,s.last,46);
   av.textContent=s.first[0]+s.last[0];
-  document.getElementById("d-name").textContent=s.first+" "+s.last;
-  document.getElementById("d-sub").textContent="Grade "+s.grade+" · Period "+s.period;
+  document.getElementById("d-name").textContent=`${s.first} ${s.last}`;
+  document.getElementById("d-sub").textContent=`Grade ${s.grade} · Period ${s.period}`;
 
-  var week="Week of "+new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+  const week=`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`;
   document.getElementById("week-label").textContent=week;
 
-  // Score entry fields
-  document.getElementById("score-fields").innerHTML=skills.map(function(sk){
-    var last=getLastVal(s.id,sk.id);
-    var entryCount=getVals(s.id,sk.id).length;
-    return '<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-      +'<div><div style="font-weight:600;font-size:15px">'+sk.name+'</div>'
-      +'<div style="font-size:12px;color:var(--text2)">'+(sk.lower_better?"↓ lower is better":"↑ higher is better")+' · '+sk.unit+'</div></div>'
-      +'<div style="text-align:right">'
-      +(last!==null?'<div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold)">'+last+' '+sk.unit+'</div>':"")
-      +(entryCount>0?'<button onclick="openSkillModal(\''+sk.id+'\')" style="width:auto;padding:2px 8px;font-size:10px;margin-top:4px;background:none;border-color:var(--border);color:var(--text3)">'+entryCount+' entries ›</button>':"")
-      +'</div>'
-      +'</div>'
-      +'<input type="number" step="0.1" inputmode="decimal" placeholder="Enter '+sk.unit+'…" id="sf-'+sk.id+'" style="font-size:24px;text-align:center;padding:14px;border-radius:12px"/>'
-      +'</div>';
-  }).join("")+'<div style="height:4px"></div>';
+  // Score fields — one per skill, big number inputs
+  document.getElementById("score-fields").innerHTML=skills.map(sk=>{
+    const last=getLastVal(s.id,sk.id);
+    return `<div style="margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div>
+          <div style="font-weight:600;font-size:15px">${sk.name}</div>
+          <div style="font-size:12px;color:var(--text2)">${sk.lower_better?"↓ lower is better":"↑ higher is better"} · unit: ${sk.unit}</div>
+        </div>
+        ${last!==null?`<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Last</div><div style="font-size:15px;font-weight:600;color:var(--gold)">${last} ${sk.unit}</div></div>`:""}
+      </div>
+      <input type="number" step="0.1" inputmode="decimal" placeholder="Enter ${sk.unit}…" id="sf-${sk.id}" style="font-size:24px;text-align:center;padding:14px;border-radius:12px"/>
+    </div>`;
+  }).join("")+`<div style="height:4px"></div>`;
+
+  // My progress
+  renderMyProgress();
 }
 
-function renderProgress(){
-  var s=selectedStudent;
-  document.getElementById("my-progress").innerHTML=
-    '<div style="font-size:12px;color:var(--text3);margin-bottom:12px;text-align:center">Tap any skill to see your full history</div>'
-    +skills.map(function(sk){
-      var vals=getVals(s.id,sk.id);
-      var rank=getRank(s.id,sk.id);
-      var imp=getImp(s.id,sk.id);
-      var goal=studentGoals[s.id]&&studentGoals[s.id][sk.id];
-      var last=getLastVal(s.id,sk.id);
-      var entryCount=vals.length;
-
-      // Mini spark bars (last 8 entries)
-      var chartHTML="";
-      if(vals.length>1){
-        var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),range=mx-mn||1;
-        chartHTML='<div style="display:flex;align-items:flex-end;gap:2px;height:32px;margin:8px 0">'
-          +vals.slice(-8).map(function(v,i,arr){
-            var h=Math.max(3,Math.round(((sk.lower_better?mx-v:v-mn)/range)*28)+3);
-            var isLast=i===arr.length-1;
-            return '<div style="flex:1;height:'+h+'px;background:'+(isLast?"var(--gold)":"rgba(201,168,76,0.3)")+';border-radius:3px 3px 0 0"></div>';
-          }).join("")
-          +'</div>';
-      }
-
-      return '<button onclick="openSkillModal(\''+sk.id+'\')" style="display:block;width:100%;text-align:left;border-radius:12px;padding:0;border:1px solid var(--border);background:var(--surface2);margin-bottom:8px;overflow:hidden;cursor:pointer">'
-        +'<div style="padding:12px 14px">'
-        +'<div style="display:flex;align-items:center;gap:10px">'
-        +'<div style="flex:1">'
-        +'<div style="font-weight:600;font-size:14px">'+sk.name+'</div>'
-        +'<div style="font-size:12px;color:var(--text2);margin-top:2px">'+(last!==null?"Latest: "+last+" "+sk.unit:entryCount===0?"No entries yet":"—")+(entryCount>0?' · '+entryCount+' entr'+(entryCount===1?"y":"ies"):"")+'</div>'
-        +'</div>'
-        +(imp?'<span style="font-size:12px;color:'+(imp.ok?"var(--gold)":"var(--red)")+'">'+(imp.ok?"▲":"▼")+imp.pct+'%</span>':"")
-        +rankBadge(rank)
-        +'<span style="color:var(--text3);font-size:16px;margin-left:4px">›</span>'
-        +'</div>'
-        +chartHTML
-        +(goal&&last!==null
-          ?'<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px"><span>🎯 Goal: '+goal+' '+sk.unit+'</span><span>'+(sk.lower_better?last<=goal:last>=goal?'<span style="color:var(--green)">✓ Achieved!</span>':Math.abs(last-goal).toFixed(1)+" away")+'</span></div><div class="goal-bar-wrap"><div class="goal-bar-fill" style="width:'+Math.min(100,Math.round(sk.lower_better?(goal/last*100):(last/goal*100)))+'%"></div></div></div>'
-          :"")
-        +'</div>'
-        +'</button>';
-    }).join("");
-}
-
-function renderGoals(){
-  var s=selectedStudent;
-  var goals=studentGoals[s.id]||{};
-
-  // Goal input fields
-  document.getElementById("goal-fields").innerHTML=skills.map(function(sk){
-    var last=getLastVal(s.id,sk.id);
-    var currentGoal=goals[sk.id]||"";
-    return '<div style="margin-bottom:16px;padding-bottom:16px;border-bottom:1px solid var(--border)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-      +'<div><div style="font-weight:600;font-size:14px">'+sk.name+'</div>'
-      +'<div style="font-size:12px;color:var(--text2)">'+(sk.lower_better?"↓ lower is better":"↑ higher is better")+' · '+sk.unit+'</div></div>'
-      +(last!==null?'<div style="text-align:right"><div style="font-size:11px;color:var(--text3)">Current</div><div style="font-size:14px;font-weight:600;color:var(--gold)">'+last+' '+sk.unit+'</div></div>':"")
-      +'</div>'
-      +'<input type="number" step="0.1" inputmode="decimal" placeholder="Set your target '+sk.unit+'…" id="gf-'+sk.id+'" value="'+currentGoal+'" style="font-size:20px;text-align:center;padding:12px;border-radius:12px"/>'
-      +'</div>';
+function renderMyProgress(){
+  const s=selectedStudent;
+  document.getElementById("my-progress").innerHTML=skills.map(sk=>{
+    const vals=getVals(s.id,sk.id);
+    const rank=getRank(s.id,sk.id);
+    const imp=vals.length>=2?((()=>{const d=vals[vals.length-1]-vals[0];return{pct:((Math.abs(d)/Math.abs(vals[0]))*100).toFixed(1),ok:sk.lower_better?d<0:d>0};})()):{};
+    return `<div class="rank-row">
+      <div style="flex:1">
+        <div style="font-weight:500;font-size:13px">${sk.name}</div>
+        <div style="font-size:12px;color:var(--text2)">${vals.length?`Latest: ${vals[vals.length-1]} ${sk.unit}`:"No entries yet"}</div>
+      </div>
+      ${imp.pct?`<span style="font-size:12px;color:${imp.ok?"var(--gold)":"var(--red)"}">${imp.ok?"▲":"▼"}${imp.pct}%</span>`:""}
+      ${rankBadge(rank,students.length)}
+    </div>`;
   }).join("");
-
-  // Goal progress list
-  var hasGoals=skills.some(function(sk){return goals[sk.id];});
-  document.getElementById("goal-progress-list").innerHTML=hasGoals?skills.map(function(sk){
-    var goal=goals[sk.id];if(!goal)return "";
-    var last=getLastVal(s.id,sk.id);
-    var achieved=last!==null&&(sk.lower_better?last<=goal:last>=goal);
-    var pct=last!==null?Math.min(100,Math.round(sk.lower_better?(goal/last*100):(last/goal*100))):0;
-    return '<div style="margin-bottom:14px">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
-      +'<div style="font-weight:500;font-size:13px">'+sk.name+'</div>'
-      +'<div style="font-size:12px">'
-      +(achieved?'<span style="color:var(--green);font-weight:600">✓ Achieved!</span>'
-        :last!==null?'<span style="color:var(--text2)">'+Math.abs(last-goal).toFixed(1)+' '+sk.unit+' away</span>'
-        :'<span style="color:var(--text3)">No scores yet</span>')
-      +'</div></div>'
-      +'<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:4px">'
-      +'<span>'+(last!==null?last+" "+sk.unit:"—")+'</span><span>Goal: '+goal+' '+sk.unit+'</span></div>'
-      +'<div class="goal-bar-wrap"><div class="goal-bar-fill" style="width:'+pct+'%;background:'+(achieved?"linear-gradient(90deg,#2E7D32,#4CAF50)":"linear-gradient(90deg,var(--gold-dk),var(--gold))")+'"></div></div>'
-      +'</div>';
-  }).filter(Boolean).join("")
-  :'<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">Set your goals above and save them to track progress here.</div>';
 }
 
-// ── SAVE GOALS — persists to Supabase students.goals column ──
-async function saveGoals(){
-  var s=selectedStudent;
-  var goals={};
-  skills.forEach(function(sk){
-    var el=document.getElementById("gf-"+sk.id);
-    if(el&&el.value!=="")goals[sk.id]=parseFloat(el.value);
-  });
-
-  var alertEl=document.getElementById("goals-alert");
-  alertEl.innerHTML='<div class="alert alert-success">Saving…</div>';
-
-  var res=await sb.from("students").update({goals:goals}).eq("id",s.id);
-  if(res.error){
-    alertEl.innerHTML='<div class="alert alert-error">'+res.error.message+'</div>';
-    return;
-  }
-
-  // Update local state
-  studentGoals[s.id]=goals;
-  // Update the student object in the students array so it persists within this session
-  var idx=students.findIndex(function(x){return x.id===s.id;});
-  if(idx>-1)students[idx].goals=goals;
-  selectedStudent.goals=goals;
-
-  alertEl.innerHTML='<div class="alert alert-success">✓ Goals saved!</div>';
-  setTimeout(function(){alertEl.innerHTML="";},3000);
-
-  // Refresh the goal progress section
-  renderGoals();
-}
-
-// ── SUBMIT SCORES — always INSERT, never upsert ───────────────
 async function submitScores(){
-  var btn=document.getElementById("submit-btn");
+  const btn=document.getElementById("submit-btn");
   btn.disabled=true;btn.textContent="Saving…";
-  var alertEl=document.getElementById("score-alert");
-  alertEl.innerHTML="";
+  const week=document.getElementById("week-label")?.textContent||`Week of ${new Date().toLocaleDateString()}`;
 
-  var week=document.getElementById("week-label")&&document.getElementById("week-label").textContent||("Week of "+new Date().toLocaleDateString());
-  var now=new Date().toISOString();
-
-  var rows=skills.filter(function(sk){
-    var v=document.getElementById("sf-"+sk.id)&&document.getElementById("sf-"+sk.id).value;
+  const rows=skills.filter(sk=>{
+    const v=document.getElementById(`sf-${sk.id}`)?.value;
     return v!==undefined&&v!=="";
-  }).map(function(sk){
-    return {
-      student_id:selectedStudent.id,
-      skill_id:sk.id,
-      value:parseFloat(document.getElementById("sf-"+sk.id).value),
-      week_label:week,
-      logged_at:now
-    };
-  });
+  }).map(sk=>({
+    student_id:selectedStudent.id,
+    skill_id:sk.id,
+    value:parseFloat(document.getElementById(`sf-${sk.id}`).value),
+    week_label:week
+  }));
 
   if(!rows.length){
-    alertEl.innerHTML='<div class="alert alert-error">Enter at least one score before saving.</div>';
+    document.getElementById("score-alert").innerHTML=`<div class="alert alert-error">Enter at least one score before saving.</div>`;
     btn.disabled=false;btn.textContent="Save My Scores ✓";
     return;
   }
 
-  // ── Always INSERT — preserves full history, no conflicts ──
-  var res=await sb.from("entries").insert(rows);
-  if(res.error){
-    alertEl.innerHTML='<div class="alert alert-error">'+res.error.message+'</div>';
+  const{error}=await sb.from("entries").upsert(rows,{onConflict:"student_id,skill_id,week_label"});
+  if(error){
+    document.getElementById("score-alert").innerHTML=`<div class="alert alert-error">${error.message}</div>`;
     btn.disabled=false;btn.textContent="Save My Scores ✓";
     return;
   }
 
-  // Update local entries so ranks/progress reflect new scores immediately
-  rows.forEach(function(r){
+  // Update local entries
+  rows.forEach(r=>{
     if(!entries[r.student_id])entries[r.student_id]={};
     if(!entries[r.student_id][r.skill_id])entries[r.student_id][r.skill_id]=[];
-    entries[r.student_id][r.skill_id].push({value:r.value, logged_at:r.logged_at, week_label:r.week_label});
+    entries[r.student_id][r.skill_id].push(r.value);
   });
 
-  // Clear fields
-  skills.forEach(function(sk){var el=document.getElementById("sf-"+sk.id);if(el)el.value="";});
-
-  // Build success screen
-  var ranksHTML=skills.map(function(sk){
-    var rank=getRank(selectedStudent.id,sk.id);
-    var val=getLastVal(selectedStudent.id,sk.id);
-    if(!val)return "";
-    var badge=rankBadge(rank); // empty string if outside top 10
-    return '<div class="rank-row"><div style="flex:1"><div style="font-weight:500;font-size:14px">'+sk.name+'</div><div style="font-size:12px;color:var(--text2)">'+val+' '+sk.unit+'</div></div>'+badge+'</div>';
+  // Build success ranks
+  const ranksHTML=skills.map(sk=>{
+    const rank=getRank(selectedStudent.id,sk.id);
+    const val=getLastVal(selectedStudent.id,sk.id);
+    if(!val&&!rows.find(r=>r.skill_id===sk.id))return "";
+    return `<div class="rank-row">
+      <div style="flex:1"><div style="font-weight:500;font-size:14px">${sk.name}</div></div>
+      ${rankBadge(rank,students.length)}
+    </div>`;
   }).filter(Boolean).join("");
 
-  document.getElementById("success-msg").textContent="Scores saved for "+selectedStudent.first+"! Great work this week.";
-  document.getElementById("success-ranks").innerHTML=ranksHTML||'<div style="color:var(--text3);font-size:13px;text-align:center">Keep logging to see your rankings!</div>';
+  document.getElementById("success-msg").textContent=`Scores saved for ${selectedStudent.first}! Great work this week.`;
+  document.getElementById("success-ranks").innerHTML=ranksHTML||`<div style="color:var(--text3);font-size:13px;text-align:center">Keep logging to see your rankings!</div>`;
   show("screen-success");
-}
-
-function showScoresScreen(){
-  show("screen-scores");
-  setTab("progress");
-}
-
-function showLeaderboard(){
-  show("screen-scores");
-  setTab("leaderboard");
 }
 
 function goBack(screen){
@@ -777,148 +517,5 @@ function goBack(screen){
   if(screen==="select")filterStudents();
 }
 </script>
-<!-- SKILL DETAIL MODAL -->
-<div id="skill-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:999;display:flex;align-items:flex-end;justify-content:center;padding:0">
-  <div id="skill-modal-inner" style="background:var(--surface);border:1px solid var(--border2);border-radius:20px 20px 0 0;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(0,0,0,0.5);padding-bottom:env(safe-area-inset-bottom)">
-    <!-- Handle bar -->
-    <div style="display:flex;justify-content:center;padding:12px 0 4px">
-      <div style="width:40px;height:4px;background:var(--border2);border-radius:99px"></div>
-    </div>
-    <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px">
-      <div>
-        <div id="sk-modal-name" style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--gold)"></div>
-        <div id="sk-modal-sub" style="font-size:12px;color:var(--text2);margin-top:2px"></div>
-      </div>
-      <button onclick="closeSkillModal()" style="width:36px;height:36px;border-radius:50%;padding:0;background:var(--surface2);border-color:var(--border);font-size:18px;color:var(--text2)">×</button>
-    </div>
-    <!-- Content -->
-    <div style="padding:0 20px 24px">
-      <!-- Stats row -->
-      <div id="sk-modal-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px"></div>
-      <!-- Chart -->
-      <div id="sk-modal-chart" style="margin-bottom:20px"></div>
-      <!-- History table -->
-      <div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Full History</div>
-      <div id="sk-modal-history"></div>
-    </div>
-  </div>
-</div>
-
-<script>
-// ── SKILL DETAIL MODAL ────────────────────────────────────────
-function openSkillModal(skid){
-  var sk=skills.find(function(s){return s.id===skid;});
-  var s=selectedStudent;
-  if(!sk||!s)return;
-
-  var allEntries=getEntries(s.id,skid); // [{value, logged_at, week_label}]
-  var vals=allEntries.map(function(e){return e.value;});
-  var rank=getRank(s.id,skid);
-  var imp=getImp(s.id,skid);
-  var best=vals.length?(sk.lower_better?Math.min.apply(null,vals):Math.max.apply(null,vals)):null;
-  var last=vals.length?vals[vals.length-1]:null;
-
-  document.getElementById("sk-modal-name").textContent=sk.name;
-  document.getElementById("sk-modal-sub").textContent=sk.unit+" · "+(sk.lower_better?"↓ lower is better":"↑ higher is better");
-
-  // Stat cards
-  document.getElementById("sk-modal-stats").innerHTML=[
-    {icon:"📍",label:"Latest",val:last!==null?last+" "+sk.unit:"—"},
-    {icon:"⭐",label:"Personal Best",val:best!==null?best+" "+sk.unit:"—"},
-    {icon:"🏆",label:"Class Rank",val:rank&&rank<=10?"#"+rank+(rank===1?" 🥇":rank===2?" 🥈":rank===3?" 🥉":""):"Keep going!"},
-  ].map(function(c){
-    return '<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;text-align:center">'
-      +'<div style="font-size:18px;margin-bottom:4px">'+c.icon+'</div>'
-      +'<div style="font-size:13px;font-weight:600;color:var(--gold)">'+c.val+'</div>'
-      +'<div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">'+c.label+'</div>'
-      +'</div>';
-  }).join("");
-
-  // Bar chart
-  var chartHTML="";
-  if(vals.length>0){
-    var mn=Math.min.apply(null,vals),mx=Math.max.apply(null,vals),range=mx-mn||1;
-    var barW=Math.max(24, Math.min(48, Math.floor(320/vals.length)-4));
-    chartHTML='<div style="background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:14px">'
-      +'<div style="font-size:12px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px">Progress Chart</div>'
-      +(imp?'<div style="font-size:12px;color:'+(imp.ok?"var(--gold)":"var(--red)")+';margin-bottom:10px">'+(imp.ok?"📈 Improved":"📉 Down")+' '+imp.pct+'% since first entry</div>':"")
-      +'<div style="display:flex;align-items:flex-end;gap:4px;height:80px;overflow-x:auto;padding-bottom:4px">'
-      +allEntries.map(function(e,i){
-        var h=Math.max(6,Math.round(((sk.lower_better?mx-e.value:e.value-mn)/range)*70)+6);
-        var isLast=i===allEntries.length-1;
-        var isBest=e.value===best;
-        var bg=isLast?"var(--gold)":isBest?"rgba(201,168,76,0.7)":"rgba(201,168,76,0.25)";
-        var d=new Date(e.logged_at);
-        var label=(d.getMonth()+1)+"/"+(d.getDate());
-        return '<div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0;width:'+barW+'px">'
-          +'<div style="font-size:9px;color:var(--text3);margin-bottom:2px;white-space:nowrap">'+e.value+'</div>'
-          +'<div style="width:100%;height:'+h+'px;background:'+bg+';border-radius:4px 4px 0 0'+(isLast?';box-shadow:0 0 8px rgba(201,168,76,0.4)':'')+'" title="'+e.value+' '+sk.unit+'"></div>'
-          +'<div style="font-size:8px;color:var(--text3);margin-top:3px;white-space:nowrap">'+label+'</div>'
-          +'</div>';
-      }).join("")
-      +'</div></div>';
-  } else {
-    chartHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px;background:var(--surface2);border-radius:12px">No entries yet for this skill</div>';
-  }
-  document.getElementById("sk-modal-chart").innerHTML=chartHTML;
-
-  // History table — newest first
-  if(allEntries.length){
-    var reversed=[...allEntries].reverse();
-    document.getElementById("sk-modal-history").innerHTML=
-      '<div style="border:1px solid var(--border);border-radius:12px;overflow:hidden">'
-      +'<div style="display:grid;grid-template-columns:1fr auto auto;gap:0;font-size:11px;font-weight:600;color:var(--gold);letter-spacing:.06em;text-transform:uppercase;padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">'
-      +'<span>Date</span><span style="text-align:right;padding-right:16px">Score</span><span style="text-align:right">vs Best</span></div>'
-      +reversed.map(function(e,i){
-        var d=new Date(e.logged_at);
-        var dateStr=d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
-        var timeStr=d.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit"});
-        var isBest=e.value===best;
-        var isLatest=i===0;
-        var diff=best!==null?e.value-best:null;
-        var diffStr="";
-        if(diff!==null){
-          if(isBest) diffStr='<span style="color:var(--gold);font-size:11px">★ Best</span>';
-          else{
-            var sign=sk.lower_better?(diff<0?"▲":"▼"):(diff>0?"▲":"▼");
-            var good=sk.lower_better?diff<0:diff>0;
-            diffStr='<span style="color:'+(good?"var(--gold)":"var(--red)")+';font-size:11px">'+sign+' '+Math.abs(diff).toFixed(1)+'</span>';
-          }
-        }
-        return '<div style="display:grid;grid-template-columns:1fr auto auto;gap:0;padding:11px 14px;border-bottom:1px solid var(--border);align-items:center;background:'+(isLatest?"rgba(201,168,76,0.06)":"transparent")+'">'
-          +'<div><div style="font-size:13px;font-weight:'+(isLatest?600:400)+'">'+dateStr+(isLatest?' <span style="font-size:10px;color:var(--gold);background:var(--gold-glow);padding:1px 6px;border-radius:99px">Latest</span>':"")+'</div>'
-          +'<div style="font-size:11px;color:var(--text3)">'+timeStr+(e.week_label?' · '+e.week_label:"")+'</div></div>'
-          +'<div style="font-size:15px;font-weight:600;color:'+(isBest?"var(--gold)":"var(--text)")+';text-align:right;padding-right:16px">'+e.value+' <span style="font-size:11px;font-weight:400;color:var(--text3)">'+sk.unit+'</span></div>'
-          +'<div style="text-align:right;min-width:52px">'+diffStr+'</div>'
-          +'</div>';
-      }).join("")
-      +'</div>';
-  } else {
-    document.getElementById("sk-modal-history").innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">No history yet. Submit your scores to start tracking!</div>';
-  }
-
-  document.getElementById("skill-modal").classList.remove("hidden");
-  // Swipe down to close
-  setupModalSwipe();
-}
-
-function closeSkillModal(){
-  document.getElementById("skill-modal").classList.add("hidden");
-}
-
-// Tap backdrop to close
-document.getElementById("skill-modal").addEventListener("click",function(e){
-  if(e.target===this)closeSkillModal();
-});
-
-// Simple swipe-down to close on mobile
-function setupModalSwipe(){
-  var inner=document.getElementById("skill-modal-inner");
-  var startY=0;
-  inner.addEventListener("touchstart",function(e){startY=e.touches[0].clientY;},{passive:true});
-  inner.addEventListener("touchend",function(e){
-    if(e.changedTouches[0].clientY-startY>80)closeSkillModal();
-  },{passive:true});
-}
-</script>
+</body>
+</html>
