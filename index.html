@@ -615,7 +615,7 @@ tr:hover td{background:rgba(201,168,76,.03)}
 // ════════════════════════════════════════════════════════════
 var SB_URL   = "https://vsycqimhkzppautumsyo.supabase.co";
 var SB_KEY   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzeWNxaW1oa3pwcGF1dHVtc3lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MTMyMjEsImV4cCI6MjA5MzM4OTIyMX0.upBxit5d5nA6b9oVy8CbxIbzpO2m7_Df27IgKjg3l2k";
-var ADMIN_EMAIL = "your-admin@example.com";
+var ADMIN_EMAIL = "your-admin@example.com"; // ✏️ CHANGE THIS to your email to see the Admin tab
 // ════════════════════════════════════════════════════════════
 
 // ── Load Supabase SDK then boot ──────────────────────────────
@@ -733,7 +733,9 @@ function getRank(sid, skid) {
   var i = getRanked(skid, "all").findIndex(function(s) { return s.id === sid; });
   return i === -1 ? null : i + 1;
 }
-function isAdmin() { return ME && ME.email === ADMIN_EMAIL; }
+function isAdmin() {
+  return ME && ADMIN_EMAIL !== "chuynh@lasdschools.org" && ME.email === ADMIN_EMAIL;
+}
 function syncPeriods(selectIds) {
   var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
   selectIds.forEach(function(id) {
@@ -834,7 +836,49 @@ function bootApp(user) {
   document.getElementById("login-page").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
   if (isAdmin()) document.getElementById("nav-admin").classList.remove("hidden");
-  loadProfile().then(function() { loadData(); });
+  loadProfile().then(function() {
+    return loadData();
+  }).then(function() {
+    // Auto-load any active merged rosters on login
+    return loadActiveMerges();
+  });
+}
+
+function loadActiveMerges() {
+  // Find all shares where others shared with me and merge is active
+  return sb.from("teacher_shares")
+    .select("*")
+    .eq("shared_with_teacher_id", ME.id)
+    .eq("active", true)
+    .then(function(r) {
+      var activeShares = r.data || [];
+      if (!activeShares.length) return;
+      // Store for panel rendering
+      sharedWithMe = activeShares;
+      // Load students from each active share
+      var ownerIds = activeShares.map(function(s) { return s.owner_teacher_id; });
+      return sb.from("students").select("*").in("teacher_id", ownerIds).then(function(sr) {
+        var newStudents = (sr.data || []).filter(function(ms) {
+          return !students.find(function(s) { return s.id === ms.id; });
+        });
+        mergedStudents = newStudents;
+        if (!newStudents.length) return;
+        // Load their entries
+        var ids = newStudents.map(function(s) { return s.id; });
+        return sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+          (er.data || []).forEach(function(e) {
+            if (!entries[e.student_id]) entries[e.student_id] = {};
+            if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
+            var exists = entries[e.student_id][e.skill_id].find(function(x) {
+              return typeof x === "object" ? x.id === e.id : false;
+            });
+            if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+          });
+          // Re-render leaderboard with merged students
+          renderLB();
+        });
+      });
+    });
 }
 
 // ── PROFILE ──────────────────────────────────────────────────
@@ -877,6 +921,7 @@ function renderProfileStats() {
 
 // ── LOAD DATA ────────────────────────────────────────────────
 function loadData() {
+  if (!ME) return Promise.resolve();
   return Promise.all([
     sb.from("students").select("*").eq("teacher_id", ME.id).order("last"),
     sb.from("skills").select("*").eq("teacher_id", ME.id).order("created_at")
