@@ -6,117 +6,428 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <title>PE Progress Tracker</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400&display=swap" rel="stylesheet"/>
 <style>
+/* ═══════════════════════════════════════════════════════════
+   PE TRACKER — "Elegance in Simplicity" design system
+   Inspired by: warm light grey bg · deep navy cards · brushed gold accents
+   ═══════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400&display=swap');
+
 :root {
-  --navy:#0D1B3E; --navy2:#162248; --navy3:#1E2F5A;
-  --gold:#C9A84C; --gold-lt:#F0D98B; --gold-dk:#9B7A2A; --gold-glow:rgba(201,168,76,0.18);
-  --bg:#09122B; --surface:#162248; --surface2:#1E2F5A; --surface3:#243570;
-  --border:rgba(201,168,76,0.18); --border2:rgba(201,168,76,0.32);
-  --text:#F0E6C8; --text2:#A8B4CC; --text3:#6B7A99;
-  --red:#D4574A; --red-lt:rgba(212,87,74,0.15);
-  --purple:#7B6FD4; --purple-lt:rgba(123,111,212,0.18);
-  font-family:'DM Sans',sans-serif;
+  /* Page background — warm light grey like the template */
+  --bg:#E8E8EC;
+  --bg2:#DDDDE4;
+
+  /* Cards — deep navy like template cards */
+  --card:#1E2340;
+  --card2:#263060;
+  --card3:#2E3858;
+  --card-featured:#1A1E38; /* featured card with gold border */
+
+  /* Gold — warm brushed gold like the orb */
+  --gold:#C9A84C;
+  --gold2:#E8C86A;
+  --gold3:#A8882C;
+  --gold-glow:rgba(201,168,76,0.25);
+
+  /* Header */
+  --header:#1A1E38;
+
+  /* Text */
+  --text-light:#F0EDE8;     /* light text on dark cards */
+  --text-muted:rgba(240,237,232,0.55);
+  --text-dark:#1E2340;      /* dark text on light bg */
+  --text-dark2:#4A5068;
+
+  /* Utility */
+  --red:#C0392B;
+  --red-lt:rgba(192,57,43,0.12);
+  --purple:#6B7ACA;
+  --purple-lt:rgba(107,122,202,0.15);
+  --radius:14px;
+  --radius-sm:10px;
+  --radius-pill:99px;
+  --shadow-card:0 8px 32px rgba(30,35,64,0.18), 0 2px 8px rgba(30,35,64,0.1);
+  --shadow-gold:0 4px 24px rgba(201,168,76,0.3);
 }
+
+/* ── Reset & Base ──────────────────────────────────────────── */
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;
-  background-image:repeating-linear-gradient(45deg,rgba(201,168,76,.03) 0,rgba(201,168,76,.03) 1px,transparent 1px,transparent 40px),
-  repeating-linear-gradient(-45deg,rgba(201,168,76,.03) 0,rgba(201,168,76,.03) 1px,transparent 1px,transparent 40px)}
-input,select{font-family:inherit;font-size:14px;color:var(--text);background:var(--surface2);
-  border:1px solid var(--border2);border-radius:8px;padding:10px 12px;outline:none;width:100%;transition:.15s}
-input::placeholder{color:var(--text3)}
-input:focus,select:focus{border-color:var(--gold);box-shadow:0 0 0 3px var(--gold-glow)}
+body{
+  background:var(--bg);
+  color:var(--text-dark);
+  min-height:100vh;
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  /* Subtle warm texture */
+  background-image:
+    radial-gradient(ellipse at 80% 0%, rgba(201,168,76,0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 20% 100%, rgba(30,35,64,0.05) 0%, transparent 40%);
+}
+
+/* ── Typography ────────────────────────────────────────────── */
+.serif{font-family:'Playfair Display',Georgia,serif}
+
+/* ── Inputs ────────────────────────────────────────────────── */
+input,select{
+  font-family:'DM Sans',sans-serif;
+  font-size:14px;
+  color:var(--text-dark);
+  background:rgba(255,255,255,0.7);
+  border:1px solid rgba(30,35,64,0.15);
+  border-radius:var(--radius-sm);
+  padding:10px 12px;
+  outline:none;
+  width:100%;
+  transition:.2s;
+}
+input::placeholder{color:rgba(30,35,64,0.35)}
+input:focus,select:focus{
+  border-color:var(--gold3);
+  box-shadow:0 0 0 3px rgba(201,168,76,0.15);
+  background:#fff;
+}
 input:disabled{opacity:.5;cursor:not-allowed}
-select option{background:var(--navy2)}
-button{font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;
-  border:1px solid var(--border2);border-radius:8px;background:var(--surface2);
-  color:var(--text2);padding:8px 16px;transition:.15s}
-button:hover{background:var(--surface3);color:var(--text);border-color:var(--gold)}
-button:active{transform:scale(.98)}
-button.gold{background:linear-gradient(135deg,var(--gold),var(--gold-dk));color:#09122B;border-color:var(--gold);font-weight:700}
-button.gold:hover{background:linear-gradient(135deg,var(--gold-lt),var(--gold));box-shadow:0 4px 16px var(--gold-glow)}
-button:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:1.25rem;box-shadow:0 2px 20px rgba(0,0,0,.25)}
+select option{background:#fff;color:var(--text-dark)}
+
+/* On dark card contexts — override to light text */
+.card input,.card select{
+  color:var(--text-light);
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.15);
+}
+.card input::placeholder{color:rgba(240,237,232,0.35)}
+.card input:focus,.card select:focus{
+  border-color:var(--gold);
+  box-shadow:0 0 0 3px var(--gold-glow);
+  background:rgba(255,255,255,0.12);
+}
+.card select option{background:#1E2340;color:var(--text-light)}
+/* Light cards get dark inputs */
+.card-light input,.card-light select{
+  color:#1A1E38;
+  background:#F0F1F4;
+  border:1px solid rgba(26,30,56,0.2);
+  -webkit-text-fill-color:#1A1E38;
+}
+.card-light input::placeholder{color:rgba(26,30,56,0.38);-webkit-text-fill-color:rgba(26,30,56,0.38)}
+.card-light input:focus,.card-light select:focus{
+  border-color:var(--gold3);
+  box-shadow:0 0 0 3px rgba(201,168,76,0.15);
+  background:#fff;
+}
+.card-light select option{background:#fff;color:#1A1E38}
+
+/* ── Buttons ───────────────────────────────────────────────── */
+button{
+  font-family:'DM Sans',sans-serif;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  border:1px solid rgba(30,35,64,0.15);
+  border-radius:var(--radius-sm);
+  background:rgba(255,255,255,0.7);
+  color:var(--text-dark);
+  padding:8px 16px;
+  transition:all .2s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 1px 4px rgba(30,35,64,0.08);
+}
+button:hover{
+  background:var(--card);
+  color:var(--text-light);
+  border-color:var(--card);
+  transform:translateY(-1px);
+  box-shadow:0 4px 12px rgba(30,35,64,0.2);
+}
+/* Buttons inside dark cards keep light style */
+.card button{
+  background:rgba(255,255,255,0.1);
+  color:var(--text-light);
+  border-color:rgba(255,255,255,0.15);
+}
+.card button:hover{
+  background:rgba(255,255,255,0.18);
+  color:var(--text-light);
+  border-color:rgba(255,255,255,0.25);
+}
+button:active{transform:scale(.97);box-shadow:none}
+button.gold{
+  background:linear-gradient(135deg,var(--gold2) 0%,var(--gold) 50%,var(--gold3) 100%);
+  color:#1A1E38;
+  border:1px solid rgba(232,200,106,0.4);
+  font-weight:700;
+  letter-spacing:.03em;
+  box-shadow:var(--shadow-gold);
+}
+button.gold:hover{
+  background:linear-gradient(135deg,#F0D870 0%,var(--gold2) 50%,var(--gold) 100%);
+  box-shadow:0 6px 28px rgba(201,168,76,0.45);
+}
+button:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Light btn — explicit override for light sections */
+.light-btn button{
+  background:rgba(255,255,255,0.7);
+  border-color:rgba(30,35,64,0.15);
+  color:var(--text-dark);
+}
+.light-btn button:hover{
+  background:var(--card);
+  color:var(--text-light);
+  border-color:var(--card);
+}
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.card{
+  background:var(--card);
+  border:1px solid rgba(255,255,255,0.06);
+  border-radius:var(--radius);
+  padding:1.25rem;
+  box-shadow:var(--shadow-card);
+  color:var(--text-light);
+  position:relative;
+  overflow:hidden;
+}
+.card::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,0.04) 0%,transparent 50%);
+  pointer-events:none;border-radius:inherit;
+}
+
+/* Gold-bordered featured card */
+.card-gold{
+  background:var(--card-featured);
+  border:1.5px solid var(--gold);
+  box-shadow:var(--shadow-card),0 0 0 1px rgba(201,168,76,0.1),var(--shadow-gold);
+}
+
+/* Light card for login/profile sections */
+.card-light{
+  background:#FFFFFF;
+  border:1px solid rgba(30,35,64,0.08);
+  border-radius:var(--radius);
+  padding:1.25rem;
+  box-shadow:0 2px 16px rgba(30,35,64,0.1),0 1px 4px rgba(30,35,64,0.06);
+  color:var(--text-dark);
+}
+
+/* ── Utility ───────────────────────────────────────────────── */
 .hidden{display:none!important}
 .row{display:flex;align-items:center;gap:10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .full{grid-column:1/-1}
 .mono{font-family:'DM Mono',monospace;letter-spacing:.05em}
-.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:99px;white-space:nowrap}
-.b-gold{background:linear-gradient(135deg,#F0D98B,#C9A84C);color:#09122B}
-.b-silver{background:linear-gradient(135deg,#BEC8D8,#8A96AA);color:#09122B}
-.b-bronze{background:linear-gradient(135deg,#D4A06A,#A06830);color:#fff}
-.b-green{background:var(--gold-glow);color:var(--gold);border:1px solid rgba(201,168,76,.3)}
-.b-gray{background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
-.b-red{background:var(--red-lt);color:var(--red)}
-.alert{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;line-height:1.5;border:1px solid transparent}
-.a-err{background:var(--red-lt);color:#F0A090;border-color:rgba(212,87,74,.3)}
-.a-ok{background:var(--gold-glow);color:var(--gold-lt);border-color:rgba(201,168,76,.3)}
+
+/* ── Badges ────────────────────────────────────────────────── */
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:var(--radius-pill);white-space:nowrap;letter-spacing:.03em}
+.b-gold{background:linear-gradient(135deg,var(--gold2),var(--gold));color:#1A1E38;box-shadow:0 2px 8px rgba(201,168,76,0.3)}
+.b-silver{background:linear-gradient(135deg,#C0CCDC,#8090A8);color:#1A1E38}
+.b-bronze{background:linear-gradient(135deg,#D4A060,#905030);color:#fff}
+.b-green{background:rgba(201,168,76,0.15);color:var(--gold2);border:1px solid rgba(201,168,76,0.3)}
+.b-gray{background:rgba(255,255,255,0.1);color:var(--text-muted);border:1px solid rgba(255,255,255,0.12)}
+.b-red{background:var(--red-lt);color:#E08070}
+
+/* ── Alerts ────────────────────────────────────────────────── */
+.alert{padding:10px 14px;border-radius:var(--radius-sm);font-size:13px;margin-bottom:12px;line-height:1.5;border:1px solid transparent}
+.a-err{background:rgba(192,57,43,0.15);color:#F0A090;border-color:rgba(192,57,43,0.25)}
+.a-ok{background:rgba(201,168,76,0.15);color:var(--gold2);border-color:rgba(201,168,76,0.3)}
+
+/* ── Table ─────────────────────────────────────────────────── */
 table{width:100%;border-collapse:collapse}
-th{text-align:left;padding:8px 10px;font-size:11px;font-weight:600;color:var(--gold);
-  border-bottom:1px solid var(--border);white-space:nowrap;letter-spacing:.06em;text-transform:uppercase}
-td{padding:10px;border-bottom:1px solid var(--border);font-size:13px;vertical-align:middle}
+th{text-align:left;padding:9px 10px;font-size:11px;font-weight:600;color:var(--gold2);
+  border-bottom:1px solid rgba(255,255,255,0.08);white-space:nowrap;letter-spacing:.07em;text-transform:uppercase}
+td{padding:10px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:13px;vertical-align:middle;color:var(--text-light)}
 tr:last-child td{border-bottom:none}
-tr:hover td{background:rgba(201,168,76,.03)}
-.spinner{width:24px;height:24px;border:2px solid var(--border2);border-top-color:var(--gold);
-  border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
+tr:hover td{background:rgba(255,255,255,0.03)}
+
+/* ── Spinner ───────────────────────────────────────────────── */
+.spinner{width:24px;height:24px;border:2px solid rgba(201,168,76,0.2);border-top-color:var(--gold);border-radius:50%;animation:spin .7s linear infinite;margin:2rem auto}
 @keyframes spin{to{transform:rotate(360deg)}}
-.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0}
-#hdr{background:linear-gradient(90deg,var(--navy),var(--navy2));border-bottom:1px solid var(--border2);
-  padding:.875rem 1.5rem;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
-  position:sticky;top:0;z-index:100;box-shadow:0 2px 20px rgba(0,0,0,.4)}
+
+/* ── Avatars ───────────────────────────────────────────────── */
+.av{border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,0.2)}
+
+/* ── Header ────────────────────────────────────────────────── */
+#hdr{
+  background:var(--header);
+  border-bottom:1px solid rgba(201,168,76,0.15);
+  padding:.75rem 1.5rem;
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 20px rgba(0,0,0,0.3);
+}
+#hdr::after{
+  content:'';position:absolute;bottom:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(201,168,76,0.4),transparent);
+}
+
+/* ── Nav Pills ─────────────────────────────────────────────── */
+.nav-btn{
+  padding:6px 18px;border-radius:var(--radius-pill);font-size:11px;
+  letter-spacing:.06em;text-transform:uppercase;font-weight:600;
+  border:1px solid transparent;background:transparent;
+  color:rgba(240,237,232,0.45);
+  box-shadow:none;transition:all .2s;
+}
+.nav-btn:hover{
+  background:rgba(255,255,255,0.08);color:var(--text-light);
+  border-color:transparent;transform:none;box-shadow:none;
+}
+.nav-btn.on{
+  background:linear-gradient(135deg,var(--gold2),var(--gold),var(--gold3));
+  color:#1A1E38;
+  border:1px solid rgba(232,200,106,0.3);
+  font-weight:700;
+  box-shadow:var(--shadow-gold);
+}
+.nav-btn.admin-on{
+  background:rgba(107,122,202,0.3);color:#C0C8F0;
+  border-color:rgba(107,122,202,0.4);
+}
+
+/* ── Main content area ─────────────────────────────────────── */
 #main{max-width:960px;margin:0 auto;padding:1.5rem 1.25rem}
-.nav-btn{padding:6px 16px;border-radius:99px;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
-.nav-btn.on{background:var(--gold-glow);color:var(--gold);border-color:var(--border2)}
-.nav-btn.admin-on{background:var(--purple-lt);color:var(--purple);border-color:var(--purple)}
-.tabs{display:flex;gap:3px;background:var(--surface2);padding:4px;border-radius:9px;margin-bottom:1rem;border:1px solid var(--border)}
-.tab{flex:1;padding:7px 6px;border:none;background:transparent;color:var(--text3);border-radius:6px;
-  font-size:11px;letter-spacing:.03em;text-transform:uppercase;font-weight:500;white-space:nowrap;text-align:center}
-.tab.on{background:var(--gold-glow);color:var(--gold);box-shadow:inset 0 0 0 1px rgba(201,168,76,.35);font-weight:600}
-.lbl{display:block;font-size:11px;color:var(--text2);margin-bottom:4px;margin-top:12px;
-  letter-spacing:.04em;text-transform:uppercase;font-weight:500}
+
+/* ── Segmented tabs ────────────────────────────────────────── */
+.tabs{
+  display:flex;gap:2px;
+  background:rgba(30,35,64,0.1);
+  padding:3px;border-radius:11px;
+  margin-bottom:1rem;
+  border:1px solid rgba(30,35,64,0.1);
+}
+.tab{
+  flex:1;padding:7px 6px;border:none;
+  background:transparent;color:var(--text-dark2);
+  border-radius:9px;font-size:11px;letter-spacing:.04em;
+  text-transform:uppercase;font-weight:500;
+  white-space:nowrap;text-align:center;
+  transition:all .18s;box-shadow:none;
+}
+.tab:hover{color:var(--text-dark);background:rgba(30,35,64,0.08);transform:none;box-shadow:none}
+.tab.on{
+  background:var(--card);
+  color:var(--gold2);
+  font-weight:700;
+  box-shadow:0 2px 10px rgba(30,35,64,0.2),inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+/* ── Labels ────────────────────────────────────────────────── */
+.lbl{display:block;font-size:10px;color:rgba(240,237,232,0.5);margin-bottom:4px;margin-top:12px;letter-spacing:.08em;text-transform:uppercase;font-weight:600}
 .lbl:first-child{margin-top:0}
-.drop{border:1.5px dashed var(--border2);border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:.2s}
-.drop:hover{border-color:var(--gold);background:var(--gold-glow)}
-.info{background:var(--gold-glow);border:1px solid rgba(201,168,76,.25);border-radius:6px;
-  padding:9px 13px;font-size:12px;color:var(--gold-lt);margin-bottom:12px}
+.lbl-dark{color:var(--text-dark2)}
+
+/* ── Drop zone ─────────────────────────────────────────────── */
+.drop{
+  border:1.5px dashed rgba(201,168,76,0.3);
+  border-radius:var(--radius);
+  padding:2rem;text-align:center;cursor:pointer;
+  transition:.2s;background:rgba(201,168,76,0.04);
+}
+.drop:hover{border-color:var(--gold);background:rgba(201,168,76,0.08)}
+
+/* ── Info box ──────────────────────────────────────────────── */
+.info{
+  background:rgba(201,168,76,0.1);
+  border:1px solid rgba(201,168,76,0.25);
+  border-radius:var(--radius-sm);
+  padding:9px 13px;font-size:12px;
+  color:var(--gold2);margin-bottom:12px;
+}
+
+/* ── Login inputs — force dark text ────────────────────────── */
+#login-email,
+#login-pass,
+#reg-name,
+#reg-school {
+  color: #1A1E38 !important;
+  background: #F0F1F4 !important;
+  border: 1px solid rgba(26,30,56,0.2) !important;
+  -webkit-text-fill-color: #1A1E38 !important;
+  font-size: 15px !important;
+}
+#login-page input::placeholder {
+  color: rgba(26,30,56,0.38) !important;
+  -webkit-text-fill-color: rgba(26,30,56,0.38) !important;
+}
+#login-page input:focus {
+  border-color: var(--gold3) !important;
+  box-shadow: 0 0 0 3px rgba(201,168,76,0.15) !important;
+  background: #fff !important;
+}
+
+/* ── Login page ────────────────────────────────────────────── */
+#login-page{
+  min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:1rem;
+  background:
+    radial-gradient(ellipse at 70% 10%, rgba(201,168,76,0.15) 0%, transparent 45%),
+    radial-gradient(ellipse at 20% 90%, rgba(30,35,64,0.08) 0%, transparent 40%),
+    var(--bg);
+}
+
+/* ── Stat cards ────────────────────────────────────────────── */
+.stat-card{
+  background:var(--card2);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:var(--radius);
+  padding:1rem;
+  box-shadow:var(--shadow-card);
+  color:var(--text-light);
+  position:relative;overflow:hidden;
+}
+.stat-card::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+.stat-n{font-size:26px;font-weight:700;color:var(--gold2);line-height:1;margin-top:4px}
+.stat-l{font-size:11px;color:var(--text-muted);margin-top:2px;text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+
+/* ── Podium ────────────────────────────────────────────────── */
 .podium{display:flex;align-items:flex-end;justify-content:center;gap:8px;margin-bottom:1.5rem}
 .pod-col{display:flex;flex-direction:column;align-items:center;flex:1;max-width:180px}
-.pod-bar{width:100%;border-radius:8px 8px 0 0;border:1px solid var(--border);
-  display:flex;align-items:center;justify-content:center}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem}
-.stat-card::before{content:'';display:block;height:2px;background:linear-gradient(90deg,transparent,var(--gold),transparent);margin:-1rem -1rem 10px}
-.stat-n{font-size:26px;font-weight:600;color:var(--gold);line-height:1}
-.stat-l{font-size:12px;color:var(--text2);margin-top:2px;text-transform:uppercase;letter-spacing:.04em}
-#login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+.pod-bar{width:100%;border-radius:10px 10px 0 0;border:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;box-shadow:inset 0 1px 0 rgba(255,255,255,0.07)}
+
+/* ── Scrollbar ─────────────────────────────────────────────── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:rgba(30,35,64,0.08);border-radius:3px}
+::-webkit-scrollbar-thumb{background:rgba(30,35,64,0.2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:rgba(201,168,76,0.4)}
+::selection{background:rgba(201,168,76,0.2);color:var(--card)}
 </style>
 </head>
 <body>
 
 <!-- ═══════════════════════ LOGIN PAGE ═══════════════════════ -->
 <div id="login-page">
-  <div class="card" style="width:100%;max-width:420px;border-color:var(--border2)">
-    <div style="text-align:center;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border)">
-      <div style="font-size:36px;margin-bottom:8px">🏆</div>
-      <div style="font-family:'Cormorant Garamond',serif;font-size:22px;font-weight:700;color:var(--gold);letter-spacing:.06em">PE PROGRESS TRACKER</div>
-      <div id="login-sub" style="font-size:12px;color:var(--text2);margin-top:4px;letter-spacing:.08em;text-transform:uppercase">Teacher Sign In</div>
+  <div class="card-light" style="width:100%;max-width:400px;border-radius:18px;padding:1.75rem;box-shadow:0 8px 40px rgba(30,35,64,0.18)">
+    <div style="text-align:center;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid rgba(255,255,255,0.06)">
+      <div style="width:52px;height:52px;background:linear-gradient(145deg,#C4973F,#8B6A30);
+        border-radius:14px;display:flex;align-items:center;justify-content:center;
+        font-size:26px;margin:0 auto 12px;
+        box-shadow:0 4px 16px rgba(184,146,74,0.3),inset 0 1px 0 rgba(255,255,255,0.15)">🏆</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;letter-spacing:.06em">
+        <span style="background:linear-gradient(135deg,#D4AF72,#B8924A);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">PE PROGRESS TRACKER</span>
+      </div>
+      <div id="login-sub" style="font-size:11px;color:#8090A8;margin-top:4px;letter-spacing:.1em;text-transform:uppercase">Teacher Sign In</div>
     </div>
     <div id="login-alert"></div>
     <div id="signup-fields" class="hidden">
-      <label class="lbl">Your Name</label>
-      <input id="reg-name" type="text" placeholder="Coach Rivera"/>
-      <label class="lbl">School Name</label>
-      <input id="reg-school" type="text" placeholder="Lincoln High School"/>
+      <label class="lbl" style="color:#4A5068">Your Name</label>
+      <input id="reg-name" type="text" placeholder="Coach Rivera" style="color:#1E2340;background:#F5F5F7;border:1px solid rgba(30,35,64,0.18)"/>
+      <label class="lbl" style="color:#4A5068">School Name</label>
+      <input id="reg-school" type="text" placeholder="Lincoln High School" style="color:#1E2340;background:#F5F5F7;border:1px solid rgba(30,35,64,0.18)"/>
     </div>
-    <label class="lbl">Email</label>
-    <input id="login-email" type="email" placeholder="coach@school.edu"/>
-    <label class="lbl">Password</label>
-    <input id="login-pass" type="password" placeholder="••••••••"/>
-    <div id="forgot-row" style="text-align:right;margin-top:6px">
+    <label class="lbl" style="color:#4A5068">Email</label>
+    <input id="login-email" type="email" placeholder="coach@school.edu" style="color:#1A1E38;background:#EDEDF0;border:1.5px solid rgba(26,30,56,0.25);font-size:15px;-webkit-text-fill-color:#1A1E38;caret-color:#1A1E38"/>
+    <label class="lbl" style="color:#4A5068">Password</label>
+    <input id="login-pass" type="password" placeholder="••••••••" style="color:#1A1E38;background:#EDEDF0;border:1.5px solid rgba(26,30,56,0.25);font-size:15px;-webkit-text-fill-color:#1A1E38;caret-color:#1A1E38"/>
+    <div id="forgot-row" style="text-align:right;margin-top:6px;class=light-btn">
       <button id="forgot-btn" style="border:none;background:none;color:var(--text3);font-size:12px;padding:0;cursor:pointer">Forgot password?</button>
     </div>
     <button id="login-btn" class="gold" style="width:100%;margin-top:16px;padding:12px;font-size:15px">Sign In</button>
-    <button id="mode-btn" style="width:100%;margin-top:10px;border:none;background:none;color:var(--text2);font-size:13px;cursor:pointer">New teacher? Create account</button>
+    <button id="mode-btn" style="width:100%;margin-top:10px;border:none;background:none;color:var(--text3);font-size:13px;cursor:pointer;box-shadow:none;transform:none">New teacher? Create account</button>
   </div>
 </div>
 
@@ -125,10 +436,16 @@ tr:hover td{background:rgba(201,168,76,.03)}
 
   <!-- Header -->
   <div id="hdr">
-    <div style="width:36px;height:36px;border-radius:9px;background:var(--gold-glow);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🏆</div>
+    <div style="width:34px;height:34px;
+      background:linear-gradient(145deg,#C4973F,#8B6A30);
+      border-radius:10px;display:flex;align-items:center;justify-content:center;
+      font-size:16px;flex-shrink:0;
+      box-shadow:0 2px 10px rgba(184,146,74,0.3),inset 0 1px 0 rgba(255,255,255,0.15)">🏆</div>
     <div>
-      <div style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:16px;color:var(--gold);letter-spacing:.08em">PE PROGRESS TRACKER</div>
-      <div id="hdr-sub" style="font-size:11px;color:var(--text2)">Loading…</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:16px;letter-spacing:.08em;
+        background:linear-gradient(135deg,#D4AF72,#9B7028);
+        -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text">PE PROGRESS TRACKER</div>
+      <div id="hdr-sub" style="font-size:11px;color:rgba(232,234,242,0.45)">Loading…</div>
     </div>
     <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <button class="nav-btn on"  id="nav-teacher"     onclick="goView('teacher')">🏫 Teacher</button>
@@ -136,7 +453,7 @@ tr:hover td{background:rgba(201,168,76,.03)}
       <button class="nav-btn"     id="nav-leaderboard" onclick="goView('leaderboard')">🏆 Board</button>
       <button class="nav-btn"     id="nav-profile"     onclick="goView('profile')">👤 Profile</button>
       <button class="nav-btn hidden" id="nav-admin"   onclick="goView('admin')">⚙️ Admin</button>
-      <button style="font-size:12px;color:var(--text2);border:none;background:none" id="signout-btn">Sign out</button>
+      <button style="font-size:12px;color:rgba(232,234,242,0.5);border:none;background:none;box-shadow:none" id="signout-btn">Sign out</button>
     </div>
   </div>
 
@@ -373,7 +690,7 @@ tr:hover td{background:rgba(201,168,76,.03)}
     </div>
 
     <!-- ── STUDENT PORTAL ── -->
-    <div id="view-student" class="hidden" style="max-width:500px;margin:0 auto">
+    <div id="view-student" class="hidden" style="max-width:540px;margin:0 auto">
       <div id="portal-select">
         <div style="font-size:15px;font-weight:600;margin-bottom:4px">Select Your Name</div>
         <div style="color:var(--text2);font-size:13px;margin-bottom:14px">Find your name then enter your animal code.</div>
@@ -492,25 +809,33 @@ tr:hover td{background:rgba(201,168,76,.03)}
     </div>
 
     <!-- ── PROFILE ── -->
-    <div id="view-profile" class="hidden" style="max-width:560px">
-      <div style="font-size:18px;font-weight:600;margin-bottom:1.25rem">👤 My Profile</div>
-      <div class="card" style="margin-bottom:12px">
-        <div style="font-weight:600;font-size:14px;margin-bottom:14px">Personal Info</div>
+    <div id="view-profile" class="hidden" style="max-width:560px;margin:0 auto">
+      <div style="font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-bottom:1.25rem;text-align:center;color:var(--card)">👤 My Profile</div>
+
+      <!-- Personal Info — white card, dark text -->
+      <div class="card-light" style="margin-bottom:12px">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:15px;margin-bottom:14px;color:var(--card)">Personal Info</div>
         <div id="profile-alert"></div>
-        <label class="lbl">Full Name</label><input id="p-name" placeholder="Coach Rivera"/>
-        <label class="lbl">School Name</label><input id="p-school" placeholder="Lincoln High School"/>
-        <label class="lbl">Email <span style="color:var(--text3);font-size:11px">(read-only)</span></label>
-        <input id="p-email" disabled/>
-        <button onclick="saveProfile()" class="gold" style="margin-top:14px">Save Profile</button>
+        <label class="lbl" style="color:var(--text-dark2)">Full Name</label>
+        <input id="p-name" placeholder="Coach Rivera" style="color:var(--text-dark);background:rgba(30,35,64,0.06);border:1px solid rgba(30,35,64,0.15)"/>
+        <label class="lbl" style="color:var(--text-dark2)">School Name</label>
+        <input id="p-school" placeholder="Lincoln High School" style="color:var(--text-dark);background:rgba(30,35,64,0.06);border:1px solid rgba(30,35,64,0.15)"/>
+        <label class="lbl" style="color:var(--text-dark2)">Email <span style="color:var(--text-dark2);font-size:11px;opacity:.6">(read-only)</span></label>
+        <input id="p-email" disabled style="color:var(--text-dark);background:rgba(30,35,64,0.04);border:1px solid rgba(30,35,64,0.1);opacity:.7"/>
+        <button onclick="saveProfile()" class="gold" style="margin-top:14px;color:#1A1E38;width:100%">Save Profile</button>
       </div>
-      <div class="card" style="margin-bottom:12px">
-        <div style="font-weight:600;font-size:14px;margin-bottom:6px">Change Password</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:12px">A reset link will be sent to your email.</div>
+
+      <!-- Change Password -->
+      <div class="card-light" style="margin-bottom:12px">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:15px;margin-bottom:6px;color:var(--card)">Change Password</div>
+        <div style="font-size:13px;color:var(--text-dark2);margin-bottom:12px">A reset link will be sent to your email.</div>
         <div id="pw-alert"></div>
-        <button id="pw-reset-btn">📧 Send Password Reset Email</button>
+        <button id="pw-reset-btn" style="width:auto;padding:8px 16px;background:rgba(30,35,64,0.07);color:var(--text-dark);border:1px solid rgba(30,35,64,0.15)">📧 Send Password Reset Email</button>
       </div>
-      <div class="card">
-        <div style="font-weight:600;font-size:14px;margin-bottom:12px">My Stats</div>
+
+      <!-- My Stats -->
+      <div class="card-light">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;font-size:15px;margin-bottom:12px;color:var(--card)">My Stats</div>
         <div id="profile-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
       </div>
     </div>
@@ -555,11 +880,11 @@ tr:hover td{background:rgba(201,168,76,.03)}
 </div><!-- /app -->
 
 <!-- EMAIL MODAL -->
-<div id="email-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem">
+<div id="email-modal" class="hidden" style="position:fixed;inset:0;background:rgba(10,14,30,0.8);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem">
   <div class="card" style="width:100%;max-width:520px;max-height:86vh;overflow-y:auto;padding:0">
     <div class="row" style="padding:1rem 1.25rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface)">
       <span style="font-weight:600;font-size:15px">✉ Email Access Codes</span>
-      <button onclick="closeEmail()" style="margin-left:auto;border:none;background:none;font-size:22px;color:var(--text2);cursor:pointer;width:auto;padding:0">×</button>
+      <button onclick="closeEmail()" style="margin-left:auto;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:var(--text-light);cursor:pointer;width:32px;height:32px;border-radius:50%;padding:0;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
     </div>
     <div style="padding:1.25rem">
       <div class="info">Emails send via Resend through your Vercel API function.</div>
@@ -574,11 +899,11 @@ tr:hover td{background:rgba(201,168,76,.03)}
 </div>
 
 <!-- QR MODAL -->
-<div id="qr-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem">
+<div id="qr-modal" class="hidden" style="position:fixed;inset:0;background:rgba(10,14,30,0.8);backdrop-filter:blur(4px);z-index:900;display:flex;align-items:center;justify-content:center;padding:1rem">
   <div class="card" style="width:100%;max-width:440px;padding:0;border-color:var(--border2)">
     <div class="row" style="padding:1rem 1.25rem;border-bottom:1px solid var(--border)">
       <span style="font-family:'Cormorant Garamond',serif;font-weight:700;font-size:17px;color:var(--gold)">📱 Student QR Codes</span>
-      <button onclick="closeQR()" style="margin-left:auto;border:none;background:none;font-size:22px;color:var(--text2);cursor:pointer;width:auto;padding:0">×</button>
+      <button onclick="closeQR()" style="margin-left:auto;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:var(--text-light);cursor:pointer;width:32px;height:32px;border-radius:50%;padding:0;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
     </div>
     <div style="padding:1.25rem">
       <label class="lbl">Generate QR for</label>
@@ -598,12 +923,12 @@ tr:hover td{background:rgba(201,168,76,.03)}
 </div>
 
 <!-- STUDENT PROFILE MODAL -->
-<div id="sp-modal" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:998;display:flex;align-items:center;justify-content:center;padding:1rem;overflow-y:auto">
-  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;box-shadow:0 12px 50px rgba(0,0,0,.5)">
-    <div class="row" style="padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1">
+<div id="sp-modal" class="hidden" style="position:fixed;inset:0;background:rgba(10,14,30,0.85);backdrop-filter:blur(6px);z-index:998;display:flex;align-items:center;justify-content:center;padding:1rem;overflow-y:auto">
+  <div style="background:var(--card);border:1px solid rgba(255,255,255,0.08);border-radius:16px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,0.6),0 0 0 1px rgba(201,168,76,0.08)">
+    <div class="row" style="padding:1.25rem 1.5rem;border-bottom:1px solid rgba(255,255,255,0.08);position:sticky;top:0;background:var(--card);z-index:1;border-radius:16px 16px 0 0">
       <div id="sp-av" class="av" style="width:48px;height:48px;font-size:16px;flex-shrink:0"></div>
-      <div style="flex:1"><div id="sp-name" style="font-family:'Cormorant Garamond',serif;font-size:20px;font-weight:700;color:var(--gold)"></div><div id="sp-sub" style="font-size:12px;color:var(--text2);margin-top:2px"></div></div>
-      <button onclick="closeSP()" style="border:none;background:none;font-size:22px;color:var(--text2);cursor:pointer;width:auto;padding:4px 8px">×</button>
+      <div style="flex:1"><div id="sp-name" style="font-family:'Playfair Display',serif;font-size:20px;font-weight:700;color:var(--gold2)"></div><div id="sp-sub" style="font-size:12px;color:var(--text-muted);margin-top:2px"></div></div>
+      <button onclick="closeSP()" style="border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:var(--text-light);cursor:pointer;width:32px;height:32px;border-radius:50%;padding:0;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s;box-shadow:0 2px 8px rgba(0,0,0,0.3)" onmouseover="this.style.background='rgba(201,168,76,0.3)';this.style.borderColor='var(--gold)'" onmouseout="this.style.background='rgba(255,255,255,0.1)';this.style.borderColor='rgba(255,255,255,0.2)'">×</button>
     </div>
     <div style="padding:1.25rem 1.5rem">
       <div id="sp-stats" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:1.25rem"></div>
@@ -672,8 +997,8 @@ function randCode() {
 }
 
 // ── Avatar ───────────────────────────────────────────────────
-var AVB = ["#1E2F5A","#243570","#162248","#1A2850","#0D1B3E","#243060"];
-var AVT = ["#C9A84C","#F0D98B","#C9A84C","#F0D98B","#C9A84C","#F0D98B"];
+var AVB = ["#1E2340","#263060","#2E3858","#8090A8","#C9A84C","#1A1E38"];
+var AVT = ["#E8C86A","#F0EDE8","#E8C86A","#F0EDE8","#1A1E38","#E8C86A"];
 function avSty(f, l, sz) {
   var h = (f.charCodeAt(0) * 7 + l.charCodeAt(0) * 13) % 6;
   return "width:" + sz + "px;height:" + sz + "px;background:" + AVB[h] + ";color:" + AVT[h] + ";font-size:" + Math.round(sz * .35) + "px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:600;flex-shrink:0";
@@ -692,7 +1017,7 @@ function spark(vals, lb) {
     return (p + (i / (vals.length - 1)) * (w - p * 2)) + "," + (p + ((lb ? v - mn : mx - v) / r) * (h - p * 2));
   }).join(" ");
   var ok = lb ? vals[vals.length-1] < vals[0] : vals[vals.length-1] > vals[0];
-  var col = ok ? "#C9A84C" : "#D4574A";
+  var col = ok ? "#E8C86A" : "#E07070";
   var lp = pts.split(" ").slice(-1)[0].split(",");
   return '<svg width="' + w + '" height="' + h + '" style="vertical-align:middle"><polyline points="' + pts + '" fill="none" stroke="' + col + '" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="' + lp[0] + '" cy="' + lp[1] + '" r="2.5" fill="' + col + '"/></svg>';
 }
@@ -944,7 +1269,11 @@ function renderProfileStats() {
     {icon:"📋", n: skills.length,   l:"Skills"},
     {icon:"📊", n: total,           l:"Entries"},
   ].map(function(c) {
-    return '<div class="stat-card"><div style="font-size:18px">' + c.icon + '</div><div class="stat-n">' + c.n + '</div><div class="stat-l">' + c.l + '</div></div>';
+    return '<div style="background:#fff;border:1px solid rgba(30,35,64,0.08);border-radius:12px;padding:1rem;box-shadow:0 2px 8px rgba(30,35,64,0.08);text-align:center">' +
+      '<div style="font-size:20px">' + c.icon + '</div>' +
+      '<div style="font-size:24px;font-weight:700;color:var(--card);margin-top:4px">' + c.n + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dark2);margin-top:2px;text-transform:uppercase;letter-spacing:.06em">' + c.l + '</div>' +
+      '</div>';
   }).join(""));
 }
 
@@ -1101,13 +1430,13 @@ function renderPortalList() {
   setHTML("portal-count", list.length + " student" + (list.length !== 1 ? "s" : ""));
   var letters = Array.from(new Set(list.map(function(s) { return (sort==="last"?s.last:s.first)[0].toUpperCase(); }))).sort();
   setHTML("portal-alpha", letters.map(function(l) {
-    return '<button onclick="jumpLetter(\'' + l + '\')" style="min-width:28px;height:28px;padding:0;border-radius:6px;font-size:12px;font-weight:600;background:var(--gold-glow);color:var(--gold);border:1px solid rgba(201,168,76,.25);cursor:pointer;width:auto">' + l + '</button>';
+    return '<button onclick="jumpLetter(\'' + l + '\')" style="min-width:32px;height:32px;padding:0;border-radius:8px;font-size:12px;font-weight:700;background:linear-gradient(145deg,#263060,#1E2340);color:#E8C86A;border:1px solid rgba(201,168,76,0.25);cursor:pointer;width:auto;box-shadow:0 2px 8px rgba(30,35,64,0.2)">' + l + '</button>';
   }).join(""));
   var lastL = "";
   setHTML("portal-list", list.map(function(s) {
     var key = (sort==="last"?s.last:s.first)[0].toUpperCase();
     var hdr = key !== lastL ? (lastL=key,'<div data-letter="' + key + '" style="font-size:11px;font-weight:700;color:var(--gold);padding:8px 4px 2px;opacity:.7">' + key + '</div>') : "";
-    return hdr + '<button onclick="selectStudent(\'' + s.id + '\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;border-radius:10px;width:100%;border:1px solid var(--border)">' +
+    return hdr + '<button onclick="selectStudent(\'' + s.id + '\')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;border-radius:10px;width:100%;border:1px solid rgba(30,35,64,0.1);background:rgba(255,255,255,0.7);color:var(--text-dark)">' +
       avHTML(s.first, s.last, 38) +
       '<div style="flex:1"><div style="font-weight:500;font-size:14px">' + s.first + ' ' + s.last + '</div><div style="font-size:12px;color:var(--text2)">Grade ' + s.grade + ' · Period ' + s.period + '</div></div>' +
       '<span style="color:var(--text2);font-size:18px">›</span></button>';
