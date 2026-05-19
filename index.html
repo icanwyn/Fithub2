@@ -2551,36 +2551,838 @@ function saveGrid() {
       }
       return;
     }
-    // Try update first (if entry exists for this week), then insert
-    sb.from("entries")
-      .update({ value: rows[i].value })
-      .eq("student_id", rows[i].student_id)
-      .eq("skill_id",   rows[i].skill_id)
-      .eq("week_label", rows[i].week_label)
-      .then(function(upd) {
-        if (upd.error) {
-          // Update failed — try fresh insert
-          sb.from("entries").insert([rows[i]]).then(function(ins) {
-            if (ins.error && ins.error.code !== "23505") {
+    // Check if entry exists for this week, then update or insert
+    (function(row) {
+      sb.from("entries")
+        .select("id")
+        .eq("student_id", row.student_id)
+        .eq("skill_id",   row.skill_id)
+        .eq("week_label", row.week_label)
+        .then(function(chk) {
+          var existing = chk.data && chk.data.length > 0;
+          var op = existing
+            ? sb.from("entries").update({ value: row.value }).eq("id", chk.data[0].id)
+            : sb.from("entries").insert([row]);
+          op.then(function(res) {
+            if (res.error) {
               failed++;
-              if (!firstErr) firstErr = ins.error.message;
-              console.error("Insert failed:", rows[i], ins.error.message);
+              if (!firstErr) firstErr = res.error.message;
             } else {
               saved++;
-              if (!entries[rows[i].student_id]) entries[rows[i].student_id] = {};
-              if (!entries[rows[i].student_id][rows[i].skill_id]) entries[rows[i].student_id][rows[i].skill_id] = [];
-              entries[rows[i].student_id][rows[i].skill_id].push(rows[i].value);
+              if (!entries[row.student_id]) entries[row.student_id] = {};
+              if (!entries[row.student_id][row.skill_id]) entries[row.student_id][row.skill_id] = [];
+              entries[row.student_id][row.skill_id].push(row.value);
             }
             next(i + 1);
           });
+        });
+    })(rows[i]);
+  };
+  next(0);
+}
+
+// ── CSV ──────────────────────────────────────────────────────
+function dlTemplate() {
+  var csv = "first,last,grade,gender,email,period\nAlex,Johnson,9,M,alex@school.edu,1\nMaya,Rodriguez,9,F,maya@school.edu,2";
+  var a = document.createElement("a");
+  a.href = "data:text/csv," + encodeURIComponent(csv);
+  a.download = "roster_template.csv";
+  a.click();
+}
+function readCSV(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var lines = e.target.result.trim().split(/\r?\n/);
+    var headers = lines[0].split(",").map(function(h) { return h.trim().toLowerCase(); });
+    var miss = ["first","last","grade","gender","email","period"].filter(function(n) { return !headers.includes(n); });
+    if (miss.length) { alertEl("csv-alert", "Missing columns: " + miss.join(", ")); return; }
+    csvRows = lines.slice(1).filter(function(l) { return l.trim(); }).map(function(l) {
+      var cols = l.split(",").map(function(c) { return c.trim(); });
+      var row = {};
+      headers.forEach(function(h, i) { row[h] = cols[i] || ""; });
+      var grade = parseInt(row.grade) || 9;
+      return {first:row.first, last:row.last, grade:grade, period:parseInt(row.period)||1, gender:(row.gender||"M").toUpperCase(), email:row.email||null, access_code:makeCode(row.first, row.last, grade), teacher_id:ME.id};
+    });
+    document.getElementById("csv-count").textContent = csvRows.length + " students ready to import";
+    setHTML("csv-list", csvRows.map(function(s) {
+      return '<div class="row" style="padding:8px 12px;background:var(--surface2);border-radius:6px">' + avHTML(s.first||"?", s.last||"?", 28) + '<span style="flex:1;font-weight:500">' + s.first + ' ' + s.last + '</span><span style="color:var(--text2)">Gr ' + s.grade + ' · P' + s.period + '</span><span class="mono badge b-gray" style="font-size:11px">' + s.access_code + '</span></div>';
+    }).join(""));
+    document.getElementById("csv-preview-card").classList.remove("hidden");
+    alertEl("csv-alert", "");
+  };
+  reader.readAsText(file);
+}
+function importCSV() {
+  var btn = document.querySelector("#csv-preview-card button.gold");
+  if (btn) { btn.disabled = true; btn.textContent = "Importing…"; }
+  var ok = 0, skip = 0, fail = 0, firstErr = "";
+  var next = function(i) {
+    if (i >= csvRows.length) {
+      loadData().then(function() { cancelCSV(); });
+      alertEl("csv-alert", fail > 0 ? ok + " imported, " + skip + " skipped, " + fail + " failed — " + firstErr : "✓ " + ok + " imported, " + skip + " already existed.", fail === csvRows.length ? "err" : "ok");
+      setTimeout(function() { alertEl("csv-alert", ""); }, 6000);
+      if (btn) { btn.disabled = false; btn.textContent = "Confirm Import"; }
+      return;
+    }
+    sb.from("students").insert([Object.assign({}, csvRows[i], {teacher_id: ME.id})]).then(function(r) {
+      if (r.error) { if (r.error.code === "23505") skip++; else { fail++; if (!firstErr) firstErr = r.error.message; } }
+      else ok++;
+      next(i + 1);
+    });
+  };
+  next(0);
+}
+function cancelCSV() {
+  csvRows = [];
+  document.getElementById("csv-preview-card").classList.add("hidden");
+  document.getElementById("csv-file").value = "";
+}
+
+// ── SKILLS ───────────────────────────────────────────────────
+function setDir(lb) {
+  skLowerBetter = lb;
+  document.getElementById("sk-hi").className = lb ? "" : "gold";
+  document.getElementById("sk-lo").className = lb ? "gold" : "";
+}
+function renderSkillsList() {
+  if (!skills.length) { setHTML("skills-list", '<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">No skills yet.</div>'); return; }
+  setHTML("skills-list", skills.map(function(sk, i) {
+    return '<div class="row" style="padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:6px">' +
+      '<div style="flex:1"><div style="font-weight:500;font-size:13px">' + sk.name + '</div><div style="font-size:11px;color:var(--text2);margin-top:2px"><span class="badge b-gray">' + sk.unit + '</span> <span style="color:' + (sk.lower_better?"var(--purple)":"var(--gold)") + '">' + (sk.lower_better?"↓ lower=better":"↑ higher=better") + '</span></div></div>' +
+      '<button onclick="editSkill(\'' + sk.id + '\')" style="font-size:11px;padding:3px 8px;width:auto">Edit</button>' +
+      '<button onclick="delSkill(\'' + sk.id + '\',\'' + sk.name + '\')" style="font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent;width:auto">×</button></div>';
+  }).join(""));
+}
+function addSkill() {
+  var name = document.getElementById("sk-name").value.trim();
+  var unit = document.getElementById("sk-unit").value.trim();
+  if (!name) { alertEl("new-skill-alert", "Skill name required."); return; }
+  if (!unit) { alertEl("new-skill-alert", "Unit required."); return; }
+  sb.from("skills").insert([{teacher_id: ME.id, name: name, unit: unit, lower_better: skLowerBetter}]).then(function(r) {
+    if (r.error) { alertEl("new-skill-alert", r.error.message); return; }
+    document.getElementById("sk-name").value = "";
+    document.getElementById("sk-unit").value = "";
+    alertEl("new-skill-alert", "✓ \"" + name + "\" added!", "ok");
+    setTimeout(function() { alertEl("new-skill-alert", ""); }, 3000);
+    loadData().then(renderSkillsList);
+  });
+}
+function delSkill(id, name) {
+  if (!confirm("Delete \"" + name + "\"?\n\nAll student scores for this skill will also be deleted.")) return;
+  sb.from("skills").delete().eq("id", id).then(function(r) {
+    if (r.error) { alertEl("skills-alert", r.error.message); return; }
+    loadData().then(renderSkillsList);
+  });
+}
+function editSkill(id) {
+  var sk = skills.find(function(s) { return s.id === id; });
+  if (!sk) return;
+  var newName = prompt("Rename \"" + sk.name + '":', sk.name);
+  if (!newName || !newName.trim() || newName.trim() === sk.name) return;
+  var newUnit = prompt("Unit for \"" + newName.trim() + '":', sk.unit);
+  if (newUnit === null) return;
+  sb.from("skills").update({name: newName.trim(), unit: newUnit.trim() || sk.unit}).eq("id", id).then(function(r) {
+    if (r.error) { alertEl("skills-alert", r.error.message); return; }
+    loadData().then(renderSkillsList);
+  });
+}
+
+// ── SHARE ────────────────────────────────────────────────────
+function loadSharePanel() {
+  var shareEl = document.getElementById("share-in");
+  var outEl   = document.getElementById("share-out");
+  if (shareEl) shareEl.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading…</div>';
+  if (outEl)   outEl.innerHTML   = '<div style="color:var(--text3);font-size:13px">Loading…</div>';
+
+  // Step 1: get raw share rows (no join — avoid FK name guessing)
+  Promise.all([
+    sb.from("teacher_shares").select("*").eq("owner_teacher_id", ME.id),
+    sb.from("teacher_shares").select("*").eq("shared_with_teacher_id", ME.id)
+  ]).then(function(results) {
+    var outRows = results[0].data || [];
+    var inRows  = results[1].data || [];
+
+    // Step 2: get teacher details for all relevant IDs
+    var allIds = outRows.map(function(r) { return r.shared_with_teacher_id; })
+      .concat(inRows.map(function(r) { return r.owner_teacher_id; }));
+
+    if (!allIds.length) {
+      sharingWith  = [];
+      sharedWithMe = inRows;
+      renderSharePanel(outRows, inRows, {});
+      return;
+    }
+
+    sb.from("teachers").select("id,name,email").in("id", allIds).then(function(tr) {
+      var teacherMap = {};
+      (tr.data || []).forEach(function(t) { teacherMap[t.id] = t; });
+      renderSharePanel(outRows, inRows, teacherMap);
+    });
+  });
+}
+
+function renderSharePanel(outRows, inRows, teacherMap) {
+  sharingWith  = outRows;
+  sharedWithMe = inRows;
+
+  // Outbound (I'm sharing with them)
+  var outEl = document.getElementById("share-out");
+  if (outEl) {
+    if (!outRows.length) {
+      outEl.innerHTML = '<div style="color:var(--text3);font-size:13px">Not sharing with anyone yet.</div>';
+    } else {
+      outEl.innerHTML = "";
+      outRows.forEach(function(s) {
+        var t = teacherMap[s.shared_with_teacher_id] || {};
+        var row = document.createElement("div");
+        row.className = "row";
+        row.style.cssText = "padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px";
+        row.innerHTML =
+          '<div style="flex:1">' +
+            '<div style="font-weight:500;font-size:13px">' + (t.name || "Unknown") + '</div>' +
+            '<div style="font-size:11px;color:var(--text2)">' + (t.email || s.shared_with_teacher_id) + '</div>' +
+          '</div>';
+        var btn = document.createElement("button");
+        btn.textContent = "Revoke";
+        btn.style.cssText = "font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent;width:auto";
+        btn.onclick = (function(tid) { return function() { revokeShare(tid); }; })(s.shared_with_teacher_id);
+        row.appendChild(btn);
+        outEl.appendChild(row);
+      });
+    }
+  }
+
+  // Inbound (they shared with me)
+  var inEl = document.getElementById("share-in");
+  if (inEl) {
+    if (!inRows.length) {
+      inEl.innerHTML = '<div style="color:var(--text3);font-size:13px">No teachers have shared with you yet.<br><div style="margin-top:6px;font-size:12px;color:var(--text3)">Ask a co-teacher to go to their Share tab and enter your email.</div></div>';
+    } else {
+      inEl.innerHTML = "";
+      inRows.forEach(function(s) {
+        var t      = teacherMap[s.owner_teacher_id] || {};
+        var active = s.active !== false;
+        var row = document.createElement("div");
+        row.style.cssText = "padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:8px;border:1px solid var(--border)";
+
+        // Store name on the share object for getTeacherLabel
+        s._name = t.name || t.email || "Colleague";
+        var info = document.createElement("div");
+        info.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:8px";
+        info.innerHTML =
+          '<div style="flex:1">' +
+            '<div style="font-weight:500;font-size:13px">' + (t.name || "Unknown Teacher") + '</div>' +
+            '<div style="font-size:11px;color:var(--text2)">' + (t.email || s.owner_teacher_id) + '</div>' +
+          '</div>' +
+          '<span class="badge ' + (active ? "b-green" : "b-gray") + '">' + (active ? "Merged ✓" : "Not merged") + '</span>';
+
+        var toggle = document.createElement("label");
+        toggle.style.cssText = "display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)";
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = active;
+        cb.style.cssText = "width:18px;height:18px;accent-color:var(--gold);cursor:pointer";
+        cb.onchange = (function(oid) {
+          return function(e) { toggleMerge(oid, e.target.checked); };
+        })(s.owner_teacher_id);
+
+        toggle.appendChild(cb);
+        toggle.appendChild(document.createTextNode("Include their students in my leaderboard"));
+
+        row.appendChild(info);
+        row.appendChild(toggle);
+        inEl.appendChild(row);
+      });
+    }
+  }
+}
+function shareRoster() {
+  var email = document.getElementById("share-email").value.trim();
+  alertEl("share-alert", "");
+  if (!email) { alertEl("share-alert", "Enter a teacher email."); return; }
+  sb.from("teachers").select("id,name").eq("email", email).single().then(function(r) {
+    if (!r.data) { alertEl("share-alert", "No teacher found with that email."); return; }
+    sb.from("teacher_shares").insert([{owner_teacher_id: ME.id, shared_with_teacher_id: r.data.id, active: true}]).then(function(res) {
+      if (res.error && res.error.code === "23505") { alertEl("share-alert", "Already sharing with this teacher.", "ok"); return; }
+      if (res.error) { alertEl("share-alert", res.error.message); return; }
+      document.getElementById("share-email").value = "";
+      alertEl("share-alert", "✓ Sharing with " + (r.data.name || email) + "!", "ok");
+      loadSharePanel();
+    });
+  });
+}
+function revokeShare(tid) {
+  if (!confirm("Stop sharing with this teacher?")) return;
+  sb.from("teacher_shares").delete().eq("owner_teacher_id", ME.id).eq("shared_with_teacher_id", tid).then(loadSharePanel);
+}
+function toggleMerge(ownerId, active) {
+  sb.from("teacher_shares").update({active: active}).eq("owner_teacher_id", ownerId).eq("shared_with_teacher_id", ME.id).then(function(r) {
+    if (r.error) { alert("Error updating merge: " + r.error.message); return; }
+    if (active) {
+      // Load merged students
+      sb.from("students").select("*").eq("teacher_id", ownerId).then(function(sr) {
+        var newStudents = (sr.data || []).filter(function(ms) {
+          return !students.find(function(s) { return s.id === ms.id; });
+        });
+        mergedStudents = mergedStudents.filter(function(ms) {
+          return ms.teacher_id !== ownerId; // remove old entries for this teacher
+        }).concat(newStudents);
+
+        // Load their entries too
+        if (newStudents.length) {
+          var ids = newStudents.map(function(s) { return s.id; });
+          sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+            (er.data || []).forEach(function(e) {
+              if (!entries[e.student_id]) entries[e.student_id] = {};
+              if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
+              // avoid duplicates
+              var exists = entries[e.student_id][e.skill_id].find(function(x) { return x.id === e.id; });
+              if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+            });
+            renderLB();
+            loadSharePanel(); // refresh UI to show merged badge
+          });
         } else {
-          // Update succeeded (matched existing row)
-          saved++;
-          if (!entries[rows[i].student_id]) entries[rows[i].student_id] = {};
-          if (!entries[rows[i].student_id][rows[i].skill_id]) entries[rows[i].student_id][rows[i].skill_id] = [];
-          entries[rows[i].student_id][rows[i].skill_id].push(rows[i].value);
-          next(i + 1);
+          renderLB();
+          loadSharePanel();
         }
+      });
+    } else {
+      // Remove merged students for this owner
+      mergedStudents = mergedStudents.filter(function(ms) { return ms.teacher_id !== ownerId; });
+      renderLB();
+      loadSharePanel();
+    }
+  });
+}
+
+// ── EMAIL ────────────────────────────────────────────────────
+function openEmail() {
+  var pf = document.getElementById("email-period");
+  var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
+  pf.innerHTML = '<option value="all">All Periods</option>' + periods.map(function(p) { return '<option value="' + p + '">Period ' + p + '</option>'; }).join("");
+  document.getElementById("email-modal").classList.remove("hidden");
+  renderEmailList();
+}
+function closeEmail() { document.getElementById("email-modal").classList.add("hidden"); }
+function renderEmailList() {
+  var period = (document.getElementById("email-period") || {}).value || "all";
+  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  var withEmail = list.filter(function(s) { return s.email; });
+  document.getElementById("email-count").textContent = withEmail.length + " with email · " + sentEmails.length + " sent";
+  setHTML("email-list", list.map(function(s) {
+    return '<div class="row" style="padding:9px 12px;background:var(--surface2);border-radius:6px;margin-bottom:6px">' + avHTML(s.first, s.last, 28) +
+      '<div style="flex:1"><div style="font-size:13px;font-weight:500">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:' + (s.email?"var(--text2)":"var(--red)") + '">' + (s.email||"⚠ no email") + '</div></div>' +
+      '<span class="mono badge b-gray" style="font-size:11px">' + s.access_code + '</span>' +
+      (s.email ? '<button id="eb-' + s.id + '" onclick="sendEmail(\'' + s.id + '\')" style="font-size:12px;padding:3px 10px;width:auto">Send</button>' : '<span style="font-size:11px;color:var(--text3)">—</span>') +
+      '</div>';
+  }).join(""));
+}
+function sendEmail(id) {
+  var s = students.find(function(x) { return x.id === id; });
+  if (!s || !s.email) return;
+  var btn = document.getElementById("eb-" + id);
+  if (btn) { btn.disabled = true; btn.textContent = "Sending…"; }
+  fetch("/api/send-email", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({to: s.email, studentFirst: s.first, studentLast: s.last, accessCode: s.access_code, teacherName: profile && profile.name || "Coach", schoolName: profile && profile.school || "", period: s.period, grade: s.grade})
+  }).then(function(r) { return r.json(); }).then(function(data) {
+    if (data.success) {
+      sentEmails.push(id);
+      if (btn) btn.outerHTML = '<span class="badge b-green">Sent ✓</span>';
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = "⚠ Failed"; }
+      alert("Email failed: " + (data.error || "Unknown error"));
+    }
+    renderEmailList();
+  }).catch(function(e) {
+    if (btn) { btn.disabled = false; btn.textContent = "⚠ Error"; }
+    alert("Network error: " + e.message);
+  });
+}
+function sendAllEmails() {
+  var period = (document.getElementById("email-period") || {}).value || "all";
+  var list = (period === "all" ? students : students.filter(function(s) { return s.period === +period; })).filter(function(s) { return s.email; });
+  if (!list.length) { alert("No students with email in this period."); return; }
+  var i = 0;
+  var next = function() {
+    if (i >= list.length) return;
+    sendEmail(list[i].id);
+    i++;
+    setTimeout(next, 300);
+  };
+  next();
+}
+
+// ── QR CODE ──────────────────────────────────────────────────
+function openQR() {
+  var pf = document.getElementById("qr-period");
+  var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
+  pf.innerHTML = '<option value="all">All Students</option>' + periods.map(function(p) { return '<option value="' + p + '">Period ' + p + '</option>'; }).join("");
+  document.getElementById("qr-modal").classList.remove("hidden");
+  genQR();
+}
+function closeQR() { document.getElementById("qr-modal").classList.add("hidden"); }
+function genQR() {
+  if (!ME) return;
+  var period = (document.getElementById("qr-period") || {}).value || "all";
+  var base = location.origin + location.pathname.replace(/\/[^/]*$/, "/") + "student.html";
+  currentQRUrl = base + "?t=" + ME.id + (period !== "all" ? "&p=" + period : "");
+  document.getElementById("qr-url").textContent = currentQRUrl;
+  var wrap = document.getElementById("qr-wrap");
+  wrap.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading QR…</div>';
+  var img = new Image();
+  img.style.cssText = "border-radius:8px;border:8px solid #fff;display:block;width:220px;height:220px";
+  img.alt = "QR Code";
+  img.onload  = function() { wrap.innerHTML = ""; wrap.appendChild(img); };
+  img.onerror = function() { wrap.innerHTML = '<div style="color:var(--text2);font-size:12px;text-align:center;padding:1rem">QR failed. Share the link below.</div>'; };
+  img.src = "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" + encodeURIComponent(currentQRUrl) + "&bgcolor=ffffff&color=0D1B3E&margin=10&format=png";
+}
+function downloadQR() {
+  var img = document.querySelector("#qr-wrap img");
+  if (!img) { alert("QR not ready yet."); return; }
+  fetch(img.src).then(function(r) { return r.blob(); }).then(function(b) {
+    var a = document.createElement("a");
+    a.download = "pe-qr.png";
+    a.href = URL.createObjectURL(b);
+    a.click();
+    setTimeout(function() { URL.revokeObjectURL(a.href); }, 1000);
+  }).catch(function() { window.open(img.src, "_blank"); });
+}
+function copyLink() {
+  navigator.clipboard.writeText(currentQRUrl).then(function() {
+    var btn = document.querySelector("#qr-modal button.gold");
+    if (btn) { var orig = btn.textContent; btn.textContent = "✓ Copied!"; setTimeout(function() { btn.textContent = orig; }, 2000); }
+  });
+}
+
+// ── STUDENT PROFILE ──────────────────────────────────────────
+function openSP(id) {
+  var s = students.find(function(x) { return x.id === id; });
+  if (!s) return;
+  var av = document.getElementById("sp-av");
+  av.style.cssText = avSty(s.first, s.last, 48);
+  av.textContent = s.first[0] + s.last[0];
+  document.getElementById("sp-name").textContent = s.first + " " + s.last;
+  document.getElementById("sp-sub").textContent = "Grade " + s.grade + " · Period " + s.period + (s.email ? " · " + s.email : "");
+  var totalEntries = skills.reduce(function(sum, sk) { return sum + getVals(s.id, sk.id).length; }, 0);
+  var improving    = skills.filter(function(sk) { var imp = getImp(s.id, sk.id); return imp && imp.ok; }).length;
+  var bestRank     = null;
+  skills.forEach(function(sk) { var r = getRank(s.id, sk.id); if (r && (!bestRank || r < bestRank)) bestRank = r; });
+  setHTML("sp-stats", [
+    {icon:"📊", n: totalEntries, l:"Total Entries"},
+    {icon:"🏆", n: bestRank ? "#" + bestRank : "—", l:"Best Rank"},
+    {icon:"📈", n: improving + "/" + skills.length, l:"Improving"},
+    {icon:"📅", n: Math.max.apply(null, skills.map(function(sk) { return getVals(s.id, sk.id).length; }).concat([0])) + " wks", l:"Weeks Logged"}
+  ].map(function(c) { return '<div class="stat-card"><div style="font-size:18px">' + c.icon + '</div><div class="stat-n">' + c.n + '</div><div class="stat-l">' + c.l + '</div></div>'; }).join(""));
+  var goals = studentGoals[s.id] || {};
+  setHTML("sp-goals", skills.map(function(sk) {
+    var last = getLast(s.id, sk.id);
+    return '<div><label class="lbl">' + sk.name + ' goal (' + sk.unit + ')</label><input type="number" step="0.1" id="goal-' + sk.id + '" placeholder="' + (last !== null ? "Current: " + last : "No entries yet") + '" value="' + (goals[sk.id] || "") + '" style="font-size:14px"/></div>';
+  }).join(""));
+  setHTML("sp-charts", skills.map(function(sk) {
+    var vals = getVals(s.id, sk.id), rank = getRank(s.id, sk.id), imp = getImp(s.id, sk.id);
+    var goal = goals[sk.id], last = vals.length ? vals[vals.length-1] : null;
+    var best = vals.length ? (sk.lower_better ? Math.min.apply(null,vals) : Math.max.apply(null,vals)) : null;
+    var bars = "";
+    if (vals.length) {
+      var mn = Math.min.apply(null,vals) - 1, mx = Math.max.apply(null,vals) + 1, rng = mx - mn || 1;
+      bars = '<div style="display:flex;align-items:flex-end;gap:3px;height:64px;padding:0 4px;position:relative">' +
+        vals.map(function(v, i) {
+          var h = Math.max(4, Math.round(((sk.lower_better ? mx - v : v - mn) / rng) * 56));
+          var isLast = i === vals.length - 1;
+          var col = isLast ? "var(--gold)" : (i > 0 && (sk.lower_better ? v < vals[i-1] : v > vals[i-1]) ? "rgba(201,168,76,.5)" : "var(--surface3)");
+          return '<div style="display:flex;flex-direction:column;align-items:center;flex:1"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">' + v + '</div><div style="width:100%;height:' + h + 'px;background:' + col + ';border-radius:3px 3px 0 0"></div></div>';
+        }).join("") +
+        (goal ? '<div style="position:absolute;left:0;right:0;height:1px;background:rgba(201,168,76,.6);bottom:' + Math.round(((sk.lower_better?mx-goal:goal-mn)/rng)*56) + 'px"><span style="position:absolute;right:0;top:-14px;font-size:9px;color:var(--gold)">🎯' + goal + '</span></div>' : "") +
+        '</div>' +
+        '<div style="display:flex;gap:3px;margin-top:2px">' + vals.map(function(_,i) { return '<div style="flex:1;text-align:center;font-size:9px;color:var(--text3)">W' + (i+1) + '</div>'; }).join("") + '</div>';
+    }
+    return '<div class="card" style="border-color:' + (rank===1?"rgba(201,168,76,.4)":rank===2?"rgba(180,180,180,.3)":"var(--border)") + '">' +
+      '<div class="row" style="margin-bottom:10px"><div style="flex:1"><div style="font-weight:600;font-size:14px">' + sk.name + '</div><div style="font-size:12px;color:var(--text2)">' + sk.unit + ' · ' + (sk.lower_better?"↓ lower=better":"↑ higher=better") + '</div></div><div style="display:flex;gap:6px;align-items:center">' + rankBadge(rank) + (imp?'<span style="font-size:12px;color:' + (imp.ok?"var(--gold)":"var(--red)") + '">' + (imp.ok?"▲":"▼") + imp.pct + '%</span>':"") + '</div></div>' +
+      (vals.length ?
+        '<div style="display:flex;gap:12px;margin-bottom:10px;flex-wrap:wrap">' +
+        '<div style="font-size:12px"><span style="color:var(--text3)">Latest</span> <strong>' + last + ' ' + sk.unit + '</strong></div>' +
+        '<div style="font-size:12px"><span style="color:var(--text3)">Best</span> <strong style="color:var(--gold)">' + best + ' ' + sk.unit + '</strong></div>' +
+        (goal ? '<div style="font-size:12px"><span style="color:var(--text3)">Goal</span> <strong style="color:var(--gold)">' + goal + ' ' + sk.unit + '</strong> <span style="color:' + ((sk.lower_better?last<=goal:last>=goal)?"#4CAF50":"var(--red)") + '">' + ((sk.lower_better?last<=goal:last>=goal)?"✓ Achieved!":"(" + Math.abs(last-goal).toFixed(1) + " away)") + '</span></div>' : "") +
+        '</div>' + bars +
+        (imp ? '<div style="margin-top:10px;font-size:12px;color:var(--text2);background:var(--surface2);padding:6px 10px;border-radius:6px">' + (imp.ok ? '📈 Improved by <strong style="color:var(--gold)">' + imp.pct + '%</strong> since first entry!' : '📉 Down <strong style="color:var(--red)">' + imp.pct + '%</strong> from first entry.') + '</div>' : "")
+        : '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">No entries yet for this skill</div>') +
+      '</div>';
+  }).join(""));
+  document.getElementById("sp-modal").classList.remove("hidden");
+}
+function closeSP() { document.getElementById("sp-modal").classList.add("hidden"); }
+function saveGoals() {
+  var sid = null;
+  // Find active student in profile modal
+  var spName = document.getElementById("sp-name").textContent;
+  var s = students.find(function(x) { return (x.first + " " + x.last) === spName; });
+  if (!s) return;
+  var goals = {};
+  skills.forEach(function(sk) { var el = document.getElementById("goal-" + sk.id); if (el && el.value) goals[sk.id] = parseFloat(el.value); });
+  studentGoals[s.id] = goals;
+  openSP(s.id);
+}
+
+// ── ADMIN ────────────────────────────────────────────────────
+function loadAdmin() {
+  if (!isAdmin()) return;
+  Promise.all([
+    sb.from("teachers").select("*").order("created_at", {ascending: false}),
+    sb.from("students").select("teacher_id"),
+    sb.from("entries").select("student_id, students(teacher_id)")
+  ]).then(function(results) {
+    var teachers = results[0].data || [];
+    var sc = {}, ec = {};
+    (results[1].data || []).forEach(function(r) { sc[r.teacher_id] = (sc[r.teacher_id] || 0) + 1; });
+    (results[2].data || []).forEach(function(r) { var t = r.students && r.students.teacher_id; if (t) ec[t] = (ec[t] || 0) + 1; });
+    adminUsers = teachers.map(function(t) { return Object.assign({}, t, {sc: sc[t.id]||0, ec: ec[t.id]||0}); });
+    var now = new Date();
+    var thisMonth = adminUsers.filter(function(t) { if (!t.created_at) return false; var d = new Date(t.created_at); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear(); }).length;
+    var totalStudents = Object.values(sc).reduce(function(a,b){return a+b;},0);
+    var totalEntries  = Object.values(ec).reduce(function(a,b){return a+b;},0);
+    setHTML("admin-stats", [
+      {icon:"👩‍🏫", n:adminUsers.length, l:"Total Teachers"},
+      {icon:"🆕",  n:thisMonth,         l:"Joined This Month"},
+      {icon:"🎽",  n:totalStudents,      l:"Total Students"},
+      {icon:"📊",  n:totalEntries,       l:"Score Entries"}
+    ].map(function(c) { return '<div class="stat-card"><div style="font-size:22px">' + c.icon + '</div><div class="stat-n">' + c.n + '</div><div class="stat-l">' + c.l + '</div></div>'; }).join(""));
+    renderAdminUsers();
+    setHTML("activity-list", adminUsers.slice(0,20).map(function(t) {
+      return '<div class="row" style="padding:10px 0;border-bottom:1px solid var(--border)"><div style="width:32px;height:32px;border-radius:50%;background:var(--gold-glow);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">👩‍🏫</div><div style="flex:1"><div style="font-size:13px;font-weight:500">' + (t.name||t.email) + ' signed up</div><div style="font-size:12px;color:var(--text2)">' + (t.school||"No school") + ' · ' + t.sc + ' students</div></div><div style="font-size:12px;color:var(--text2)">' + fmtDate(t.created_at) + '</div></div>';
+    }).join(""));
+    setHTML("quick-reset", adminUsers.map(function(t) {
+      return '<div class="row" style="padding:8px 0;border-bottom:1px solid var(--border)"><div style="flex:1;font-size:13px">' + (t.name||"—") + ' <span style="color:var(--text2)">' + t.email + '</span></div><button onclick="adminReset(\'' + t.email + '\')" style="font-size:12px;padding:3px 10px;width:auto">Reset</button></div>';
+    }).join(""));
+  });
+}
+function renderAdminUsers(filter) {
+  filter = filter || "";
+  var list = adminUsers.filter(function(t) {
+    return !filter || (t.name||"").toLowerCase().includes(filter) || (t.email||"").toLowerCase().includes(filter) || (t.school||"").toLowerCase().includes(filter);
+  });
+  document.getElementById("admin-count").textContent = list.length + " teachers";
+  setHTML("admin-body", list.map(function(t) {
+    var f = (t.name||t.email||"?")[0].toUpperCase(), l = ((t.name||"").split(" ")[1]||"")[0]||"";
+    return '<tr><td><div class="row"><div class="av" style="' + avSty(f, l||f, 28) + '">' + f + l + '</div><div><div style="font-weight:500">' + (t.name||"—") + '</div><div style="font-size:11px;color:var(--text2)">' + t.email + '</div></div></div></td>' +
+      '<td style="color:var(--text2)">' + (t.school||"—") + '</td>' +
+      '<td style="text-align:center"><span class="badge b-green">' + t.sc + '</span></td>' +
+      '<td style="text-align:center;color:var(--text2)">' + t.ec + '</td>' +
+      '<td style="color:var(--text2);font-size:12px">' + fmtDate(t.created_at) + '</td>' +
+      '<td>' + (t.email===ADMIN_EMAIL?'<span class="badge b-gray" style="color:var(--purple)">Admin</span>':'<span class="badge b-gray">Teacher</span>') + '</td>' +
+      '<td><button onclick="adminReset(\'' + t.email + '\')" style="font-size:11px;padding:3px 8px;width:auto">Reset PW</button></td></tr>';
+  }).join(""));
+}
+function filterAdminUsers() { renderAdminUsers(document.getElementById("admin-search").value.toLowerCase()); }
+function adminReset(email) {
+  sb.auth.resetPasswordForEmail(email, {redirectTo: location.href}).then(function(r) {
+    alertEl("reset-alert", r.error ? r.error.message : "✓ Reset email sent to " + email, r.error ? "err" : "ok");
+  });
+}
+
+// ── UPLOAD SCORES (teacher bulk entry) ───────────────────────
+var scoreRows = []; // parsed + matched rows ready to import
+
+function dlScoreTemplate() {
+  // Build template using actual student names and skills
+  var lines = ["first,last,period,skill_name,value,week"];
+  // Add example rows using real students if available
+  var sample = students.slice(0, 3);
+  var sampleSkill = skills.length ? skills[0].name : "400m Run";
+  if (sample.length) {
+    sample.forEach(function(s) {
+      lines.push(s.first + "," + s.last + "," + s.period + "," + sampleSkill + ",," + "Week 1");
+    });
+  } else {
+    lines.push("Alex,Johnson,1," + sampleSkill + ",72.5,Week 1");
+    lines.push("Maya,Rodriguez,1," + sampleSkill + ",68.3,Week 1");
+  }
+  var a = document.createElement("a");
+  a.href = "data:text/csv," + encodeURIComponent(lines.join("\n"));
+  a.download = "score_template.csv";
+  a.click();
+}
+
+function parseCSVLine(line) {
+  // Properly parse CSV line handling quoted fields with commas inside
+  var result = [], cur = "", inQuote = false;
+  for (var i = 0; i < line.length; i++) {
+    var c = line[i];
+    if (c === '"') { inQuote = !inQuote; }
+    else if (c === ',' && !inQuote) { result.push(cur.trim()); cur = ""; }
+    else { cur += c; }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function readScoresCSV(input) {
+  var file = input.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var lines = e.target.result.trim().split(/\r?\n/).filter(function(l) { return l.trim(); });
+    if (lines.length < 2) { alertEl("scores-alert", "CSV is empty or has no data rows."); return; }
+
+    var headers = parseCSVLine(lines[0]).map(function(h) { return h.toLowerCase().replace(/[^a-z0-9_]/g, "_"); });
+    console.log("Headers found:", headers);
+
+    var need = ["first","last","period","skill_name","value","week"];
+    var miss = need.filter(function(n) { return !headers.includes(n); });
+    if (miss.length) {
+      alertEl("scores-alert", "Missing columns: " + miss.join(", ") + "<br>Headers found: " + headers.join(", "));
+      return;
+    }
+
+    var matched = 0, unmatched = 0;
+    scoreRows = lines.slice(1).map(function(l) {
+      var cols = parseCSVLine(l);
+      var row = {};
+      headers.forEach(function(h, i) { row[h] = (cols[i] || "").trim(); });
+
+      console.log("Row:", JSON.stringify(row));
+
+      // Match student - case insensitive, trim spaces
+      var student = students.find(function(s) {
+        return s.first.toLowerCase().trim() === row.first.toLowerCase() &&
+               s.last.toLowerCase().trim()  === row.last.toLowerCase()  &&
+               String(s.period)             === String(parseInt(row.period));
+      });
+
+      // Match skill - exact first, then partial
+      var skillKey = row.skill_name.toLowerCase().trim();
+      var skill = skills.find(function(sk) {
+        return sk.name.toLowerCase().trim() === skillKey;
+      });
+      if (!skill) {
+        skill = skills.find(function(sk) {
+          return sk.name.toLowerCase().includes(skillKey) || skillKey.includes(sk.name.toLowerCase());
+        });
+      }
+
+      // Value must be a valid number
+      var val = row.value.replace(/[^0-9.]/g, "");
+      var valNum = parseFloat(val);
+      var valOk = !isNaN(valNum) && val !== "";
+
+      var ok = !!(student && skill && valOk);
+      if (ok) matched++; else unmatched++;
+
+      return {
+        first: row.first, last: row.last, period: row.period,
+        skill_name: row.skill_name, value: val, week: row.week || "Week 1",
+        student: student || null,
+        skill:   skill   || null,
+        ok:      ok,
+        reason:  !student ? "Student not found" : !skill ? "Skill not found: " + row.skill_name : !valOk ? "Invalid value: " + row.value : ""
+      };
+    });
+
+    document.getElementById("scores-count").textContent = matched + " rows ready to import";
+    document.getElementById("scores-warn").textContent  = unmatched > 0 ? unmatched + " rows will be skipped" : "";
+
+    var tbody = document.getElementById("scores-list");
+    tbody.innerHTML = scoreRows.map(function(r) {
+      return '<tr style="' + (r.ok ? "" : "opacity:.5") + '">' +
+        '<td>' + (r.student
+          ? avHTML(r.student.first, r.student.last, 22) + ' <span style="font-size:13px">' + r.first + ' ' + r.last + '</span>'
+          : '<span style="color:var(--red);font-size:13px">' + r.first + ' ' + r.last + '</span>') + '</td>' +
+        '<td style="font-size:13px">' + (r.skill
+          ? r.skill.name
+          : '<span style="color:var(--red)">' + r.skill_name + '</span>') + '</td>' +
+        '<td style="font-weight:500">' + r.value + (r.skill ? ' <span style="font-size:11px;color:var(--text2)">' + r.skill.unit + '</span>' : '') + '</td>' +
+        '<td style="font-size:12px;color:var(--text2)">' + r.week + '</td>' +
+        '<td>' + (r.ok
+          ? '<span class="badge b-green">✓ Ready</span>'
+          : '<span class="badge b-red" title="' + r.reason + '">✗ ' + r.reason + '</span>') + '</td>' +
+        '</tr>';
+    }).join("");
+
+    document.getElementById("scores-preview-card").classList.remove("hidden");
+    alertEl("scores-alert", "");
+  };
+  reader.readAsText(file);
+}
+
+function importScores() {
+  var toInsert = scoreRows.filter(function(r) { return r.ok; });
+  if (!toInsert.length) { alertEl("scores-alert", "No valid rows to import."); return; }
+
+  var btn = document.querySelector("#scores-preview-card button.gold");
+  if (btn) { btn.disabled = true; btn.textContent = "Importing " + toInsert.length + "…"; }
+
+  var rows = toInsert.map(function(r) {
+    return {
+      student_id: r.student.id,
+      skill_id:   r.skill.id,
+      value:      parseFloat(r.value),
+      week_label: r.week
+    };
+  });
+
+  sb.from("entries").insert(rows).then(function(res) {
+    if (btn) { btn.disabled = false; btn.textContent = "Confirm Import"; }
+    if (res.error) { alertEl("scores-alert", "Import failed: " + res.error.message); return; }
+    cancelScores();
+    loadData();
+    alertEl("scores-alert", "✓ " + rows.length + " scores imported successfully!", "ok");
+    setTimeout(function() { alertEl("scores-alert", ""); }, 5000);
+  });
+}
+
+function cancelScores() {
+  scoreRows = [];
+  document.getElementById("scores-preview-card").classList.add("hidden");
+  document.getElementById("scores-file").value = "";
+}
+
+// ── SCORE GRID (direct entry) ────────────────────────────────
+function goScoreMode(mode) {
+  document.getElementById("score-grid-mode").classList.toggle("hidden", mode !== "grid");
+  document.getElementById("score-csv-mode").classList.toggle("hidden", mode !== "csv");
+  document.getElementById("stab-grid").classList.toggle("on", mode === "grid");
+  document.getElementById("stab-csv").classList.toggle("on",  mode === "csv");
+  if (mode === "grid") buildGrid();
+}
+
+function initGridFilters() {
+  // Populate skill dropdown
+  var gs = document.getElementById("grid-skill");
+  if (gs) gs.innerHTML = skills.map(function(sk) {
+    return '<option value="' + sk.id + '">' + sk.name + ' (' + sk.unit + ')</option>';
+  }).join("");
+
+  // Populate period dropdown
+  var gp = document.getElementById("grid-period");
+  if (gp) {
+    var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
+    gp.innerHTML = '<option value="all">All Periods</option>' +
+      periods.map(function(p) { return '<option value="' + p + '">Period ' + p + '</option>'; }).join("");
+  }
+  buildGrid();
+}
+
+function gridKeyNav(event, el) {
+  if (event.key === "Enter" || event.key === "Tab") {
+    event.preventDefault();
+    var inputs = Array.from(document.querySelectorAll("#score-grid-body input"));
+    var idx = inputs.indexOf(el);
+    if (inputs[idx + 1]) inputs[idx + 1].focus();
+  }
+}
+
+function buildGrid() {
+  var skid   = (document.getElementById("grid-skill")  || {}).value;
+  var period = (document.getElementById("grid-period") || {}).value || "all";
+  var sk     = skills.find(function(s) { return s.id === skid; });
+
+  // Update column header
+  var header = document.getElementById("grid-unit-header");
+  if (header && sk) header.textContent = sk.name + " (" + sk.unit + ")";
+
+  var list = period === "all" ? students : students.filter(function(s) { return s.period === +period; });
+  list = list.slice().sort(function(a,b) { return a.last.localeCompare(b.last); });
+
+  var tbody = document.getElementById("score-grid-body");
+  if (!tbody) return;
+
+  tbody.innerHTML = list.map(function(s) {
+    var existing = getLast(s.id, skid);
+    return '<tr>' +
+      '<td><div class="row">' + avHTML(s.first, s.last, 26) +
+        '<div><div style="font-weight:500;font-size:13px">' + s.first + ' ' + s.last + '</div>' +
+        (existing !== null ? '<div style="font-size:11px;color:var(--text3)">Last: ' + existing + ' ' + (sk?sk.unit:"") + '</div>' : '') +
+        '</div></div></td>' +
+      '<td style="color:var(--text2);font-size:13px">P' + s.period + '</td>' +
+      '<td><input type="number" step="0.1" inputmode="decimal" id="grid-' + s.id + '" placeholder="—"' +
+        ' style="text-align:center;font-size:16px;font-weight:500;padding:8px;max-width:120px"' +
+        ' onkeydown=\"gridKeyNav(event,this)\"/></td>' +
+      '</tr>';
+  }).join("");
+
+  // Auto-focus first input
+  var first = tbody.querySelector("input");
+  if (first) setTimeout(function() { first.focus(); }, 100);
+}
+
+function clearGrid() {
+  document.querySelectorAll("#score-grid-body input").forEach(function(el) { el.value = ""; });
+}
+
+function saveGrid() {
+  var skid = (document.getElementById("grid-skill") || {}).value;
+  var week = (document.getElementById("grid-week")  || {}).value.trim() || "Week 1";
+  var sk   = skills.find(function(s) { return s.id === skid; });
+  var okEl = document.getElementById("grid-ok");
+
+  if (!sk) { if(okEl) okEl.innerHTML = '<div class="alert a-err">Select a skill first.</div>'; return; }
+
+  var rows = [];
+  document.querySelectorAll("#score-grid-body input").forEach(function(el) {
+    if (!el.value || el.value.trim() === "") return;
+    var val = parseFloat(el.value);
+    if (isNaN(val)) return;
+    // el.id is "grid-STUDENT_UUID" — strip the prefix
+    var sid = el.id.substring(5); // removes "grid-"
+    // Verify this student belongs to this teacher
+    var student = students.find(function(s) { return s.id === sid; });
+    if (!student) return;
+    rows.push({ student_id: sid, skill_id: skid, value: val, week_label: week });
+  });
+
+  if (!rows.length) {
+    if (okEl) okEl.innerHTML = '<div class="alert a-err">No scores entered. Type a number in at least one row.</div>';
+    return;
+  }
+
+  var btn = document.querySelector("#score-grid-mode button.gold");
+  if (btn) { btn.disabled = true; btn.textContent = "Saving " + rows.length + " scores…"; }
+  if (okEl) okEl.innerHTML = "";
+
+  // Insert one at a time to get clear error feedback per row
+  var saved = 0, failed = 0, firstErr = "";
+  var next = function(i) {
+    if (i >= rows.length) {
+      if (btn) { btn.disabled = false; btn.textContent = "Save All Scores"; }
+      loadData().then(function() { buildGrid(); renderRoster(); renderProgress(); renderLB(); });
+      if (okEl) {
+        var msg = failed > 0
+          ? '<div class="alert a-err">' + saved + ' saved, ' + failed + ' failed — ' + firstErr + '</div>'
+          : '<div class="alert a-ok">✓ ' + saved + ' scores saved for ' + sk.name + ' — ' + week + '!</div>';
+        okEl.innerHTML = msg;
+        setTimeout(function() { okEl.innerHTML = ""; }, 5000);
+      }
+      return;
+    }
+    // Check if entry exists for this week, then update or insert
+    sb.from("entries")
+      .select("id")
+      .eq("student_id", rows[i].student_id)
+      .eq("skill_id",   rows[i].skill_id)
+      .eq("week_label", rows[i].week_label)
+      .then(function(chk) {
+        var existing = chk.data && chk.data.length > 0;
+        var op = existing
+          ? sb.from("entries").update({ value: rows[i].value }).eq("id", chk.data[0].id)
+          : sb.from("entries").insert([rows[i]]);
+        op.then(function(res) {
+          if (res.error) {
+            failed++;
+            if (!firstErr) firstErr = res.error.message;
+            console.error("Save failed:", rows[i], res.error.message);
+          } else {
+            saved++;
+            if (!entries[rows[i].student_id]) entries[rows[i].student_id] = {};
+            if (!entries[rows[i].student_id][rows[i].skill_id]) entries[rows[i].student_id][rows[i].skill_id] = [];
+            entries[rows[i].student_id][rows[i].skill_id].push(rows[i].value);
+          }
+          next(i + 1);
+        });
       });
   };
   next(0);
