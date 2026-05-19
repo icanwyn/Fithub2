@@ -475,7 +475,7 @@ tr:hover td{background:rgba(201,168,76,.03)}
       <div id="lb-podium" class="podium"></div>
       <div class="card"><div style="overflow-x:auto">
         <table>
-          <thead><tr><th>Rank</th><th>Student</th><th>Period</th><th>Score</th><th>Trend</th><th>Change</th></tr></thead>
+          <thead><tr><th>Rank</th><th>Student</th><th>Period</th><th>Score</th><th>Trend</th><th>Change</th><th>Class</th></tr></thead>
           <tbody id="lb-body"></tbody>
         </table>
       </div></div>
@@ -942,7 +942,7 @@ function renderRoster() {
     var logged = skills.filter(function(sk) { return getVals(s.id, sk.id).length > 0; }).length;
     var pct = skills.length ? (logged / skills.length * 100).toFixed(0) : 0;
     return '<tr>' +
-      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div><div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div></div></div></td>' +
+      '<td><div class="row">' + avHTML(s.first, s.last, 28) + '<div>' + (s.teacher_id !== ME.id ? '<span style="background:var(--purple-lt);color:var(--purple);font-size:10px;font-weight:600;padding:1px 6px;border-radius:4px;display:block;margin-bottom:2px">Colleague</span>' : '') + '<div style="font-weight:500;cursor:pointer;color:var(--gold)" onclick="openSP(\'' + s.id + '\')">' + s.first + ' ' + s.last + '</div><div style="font-size:11px;color:var(--text2)">' + (s.email || "") + '</div></div></div></td>' +
       '<td style="color:var(--text2)">' + s.grade + '</td>' +
       '<td style="color:var(--text2)">P' + s.period + '</td>' +
       '<td><div class="row" style="gap:6px"><span class="mono badge b-gray" style="font-size:11px">' + (s.access_code || "—") + '</span><button onclick="resetOne(\'' + s.id + '\')" style="font-size:11px;padding:3px 8px;width:auto" title="New code">↻</button></div></td>' +
@@ -1004,7 +1004,10 @@ function renderLB() {
       '<td style="color:var(--text2)">P' + s.period + '</td>' +
       '<td style="font-weight:500">' + s.val + ' ' + (sk ? sk.unit : "") + '</td>' +
       '<td>' + spark(getVals(s.id, skid), sk && sk.lower_better) + '</td>' +
-      '<td>' + (imp ? '<span style="color:' + (imp.ok?"var(--gold)":"var(--red)") + ';font-size:12px">' + (imp.ok?"▲":"▼") + " " + imp.pct + '%</span>' : "—") + '</td></tr>';
+      '<td>' + (imp ? '<span style="color:' + (imp.ok?"var(--gold)":"var(--red)") + ';font-size:12px">' + (imp.ok?"▲":"▼") + " " + imp.pct + '%</span>' : "—") + '</td>' +
+      '<td>' + (s.teacher_id === ME.id
+        ? '<span class="badge b-gold" style="font-size:10px">Mine</span>'
+        : '<span class="badge b-gray" style="font-size:10px;color:var(--purple)">' + getTeacherLabel(s.teacher_id) + '</span>') + '</td></tr>';
   }).join(""));
 }
 
@@ -1476,21 +1479,113 @@ function editSkill(id) {
 
 // ── SHARE ────────────────────────────────────────────────────
 function loadSharePanel() {
+  var shareEl = document.getElementById("share-in");
+  var outEl   = document.getElementById("share-out");
+  if (shareEl) shareEl.innerHTML = '<div style="color:var(--text3);font-size:13px">Loading…</div>';
+  if (outEl)   outEl.innerHTML   = '<div style="color:var(--text3);font-size:13px">Loading…</div>';
+
+  // Step 1: get raw share rows (no join — avoid FK name guessing)
   Promise.all([
-    sb.from("teacher_shares").select("shared_with_teacher_id, teachers!teacher_shares_shared_with_teacher_id_fkey(name,email)").eq("owner_teacher_id", ME.id),
-    sb.from("teacher_shares").select("owner_teacher_id, teachers!teacher_shares_owner_teacher_id_fkey(name,email), active").eq("shared_with_teacher_id", ME.id)
+    sb.from("teacher_shares").select("*").eq("owner_teacher_id", ME.id),
+    sb.from("teacher_shares").select("*").eq("shared_with_teacher_id", ME.id)
   ]).then(function(results) {
-    sharingWith  = results[0].data || [];
-    sharedWithMe = results[1].data || [];
-    setHTML("share-out", sharingWith.length ? sharingWith.map(function(s) {
-      var t = s.teachers;
-      return '<div class="row" style="padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px"><div style="flex:1"><div style="font-weight:500;font-size:13px">' + (t&&t.name||"Unknown") + '</div><div style="font-size:11px;color:var(--text2)">' + (t&&t.email||"") + '</div></div><button onclick="revokeShare(\'' + s.shared_with_teacher_id + '\')" style="font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent;width:auto">Revoke</button></div>';
-    }).join("") : '<div style="color:var(--text3);font-size:13px">Not sharing with anyone yet.</div>');
-    setHTML("share-in", sharedWithMe.length ? sharedWithMe.map(function(s) {
-      var t = s.teachers, active = s.active !== false;
-      return '<div class="row" style="padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px"><div style="flex:1"><div style="font-weight:500;font-size:13px">' + (t&&t.name||"Unknown") + '</div><div style="font-size:11px;color:var(--text2)">' + (t&&t.email||"") + '</div></div><label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text2)"><input type="checkbox" ' + (active?"checked":"") + ' onchange="toggleMerge(\'' + s.owner_teacher_id + '\',this.checked)" style="width:16px;height:16px;accent-color:var(--gold)"/> Merge</label></div>';
-    }).join("") : '<div style="color:var(--text3);font-size:13px">No teachers sharing with you yet.</div>');
+    var outRows = results[0].data || [];
+    var inRows  = results[1].data || [];
+
+    // Step 2: get teacher details for all relevant IDs
+    var allIds = outRows.map(function(r) { return r.shared_with_teacher_id; })
+      .concat(inRows.map(function(r) { return r.owner_teacher_id; }));
+
+    if (!allIds.length) {
+      sharingWith  = [];
+      sharedWithMe = inRows;
+      renderSharePanel(outRows, inRows, {});
+      return;
+    }
+
+    sb.from("teachers").select("id,name,email").in("id", allIds).then(function(tr) {
+      var teacherMap = {};
+      (tr.data || []).forEach(function(t) { teacherMap[t.id] = t; });
+      renderSharePanel(outRows, inRows, teacherMap);
+    });
   });
+}
+
+function renderSharePanel(outRows, inRows, teacherMap) {
+  sharingWith  = outRows;
+  sharedWithMe = inRows;
+
+  // Outbound (I'm sharing with them)
+  var outEl = document.getElementById("share-out");
+  if (outEl) {
+    if (!outRows.length) {
+      outEl.innerHTML = '<div style="color:var(--text3);font-size:13px">Not sharing with anyone yet.</div>';
+    } else {
+      outEl.innerHTML = "";
+      outRows.forEach(function(s) {
+        var t = teacherMap[s.shared_with_teacher_id] || {};
+        var row = document.createElement("div");
+        row.className = "row";
+        row.style.cssText = "padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px";
+        row.innerHTML =
+          '<div style="flex:1">' +
+            '<div style="font-weight:500;font-size:13px">' + (t.name || "Unknown") + '</div>' +
+            '<div style="font-size:11px;color:var(--text2)">' + (t.email || s.shared_with_teacher_id) + '</div>' +
+          '</div>';
+        var btn = document.createElement("button");
+        btn.textContent = "Revoke";
+        btn.style.cssText = "font-size:11px;padding:3px 8px;color:var(--red);background:var(--red-lt);border-color:transparent;width:auto";
+        btn.onclick = (function(tid) { return function() { revokeShare(tid); }; })(s.shared_with_teacher_id);
+        row.appendChild(btn);
+        outEl.appendChild(row);
+      });
+    }
+  }
+
+  // Inbound (they shared with me)
+  var inEl = document.getElementById("share-in");
+  if (inEl) {
+    if (!inRows.length) {
+      inEl.innerHTML = '<div style="color:var(--text3);font-size:13px">No teachers have shared with you yet.<br><div style="margin-top:6px;font-size:12px;color:var(--text3)">Ask a co-teacher to go to their Share tab and enter your email.</div></div>';
+    } else {
+      inEl.innerHTML = "";
+      inRows.forEach(function(s) {
+        var t      = teacherMap[s.owner_teacher_id] || {};
+        var active = s.active !== false;
+        var row = document.createElement("div");
+        row.style.cssText = "padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:8px;border:1px solid var(--border)";
+
+        // Store name on the share object for getTeacherLabel
+        s._name = t.name || t.email || "Colleague";
+        var info = document.createElement("div");
+        info.style.cssText = "display:flex;align-items:center;gap:10px;margin-bottom:8px";
+        info.innerHTML =
+          '<div style="flex:1">' +
+            '<div style="font-weight:500;font-size:13px">' + (t.name || "Unknown Teacher") + '</div>' +
+            '<div style="font-size:11px;color:var(--text2)">' + (t.email || s.owner_teacher_id) + '</div>' +
+          '</div>' +
+          '<span class="badge ' + (active ? "b-green" : "b-gray") + '">' + (active ? "Merged ✓" : "Not merged") + '</span>';
+
+        var toggle = document.createElement("label");
+        toggle.style.cssText = "display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text2)";
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = active;
+        cb.style.cssText = "width:18px;height:18px;accent-color:var(--gold);cursor:pointer";
+        cb.onchange = (function(oid) {
+          return function(e) { toggleMerge(oid, e.target.checked); };
+        })(s.owner_teacher_id);
+
+        toggle.appendChild(cb);
+        toggle.appendChild(document.createTextNode("Include their students in my leaderboard"));
+
+        row.appendChild(info);
+        row.appendChild(toggle);
+        inEl.appendChild(row);
+      });
+    }
+  }
 }
 function shareRoster() {
   var email = document.getElementById("share-email").value.trim();
@@ -1512,15 +1607,42 @@ function revokeShare(tid) {
   sb.from("teacher_shares").delete().eq("owner_teacher_id", ME.id).eq("shared_with_teacher_id", tid).then(loadSharePanel);
 }
 function toggleMerge(ownerId, active) {
-  sb.from("teacher_shares").update({active: active}).eq("owner_teacher_id", ownerId).eq("shared_with_teacher_id", ME.id).then(function() {
+  sb.from("teacher_shares").update({active: active}).eq("owner_teacher_id", ownerId).eq("shared_with_teacher_id", ME.id).then(function(r) {
+    if (r.error) { alert("Error updating merge: " + r.error.message); return; }
     if (active) {
-      sb.from("students").select("*").eq("teacher_id", ownerId).then(function(r) {
-        mergedStudents = (r.data || []).filter(function(ms) { return !students.find(function(s) { return s.id === ms.id; }); });
-        renderLB();
+      // Load merged students
+      sb.from("students").select("*").eq("teacher_id", ownerId).then(function(sr) {
+        var newStudents = (sr.data || []).filter(function(ms) {
+          return !students.find(function(s) { return s.id === ms.id; });
+        });
+        mergedStudents = mergedStudents.filter(function(ms) {
+          return ms.teacher_id !== ownerId; // remove old entries for this teacher
+        }).concat(newStudents);
+
+        // Load their entries too
+        if (newStudents.length) {
+          var ids = newStudents.map(function(s) { return s.id; });
+          sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+            (er.data || []).forEach(function(e) {
+              if (!entries[e.student_id]) entries[e.student_id] = {};
+              if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
+              // avoid duplicates
+              var exists = entries[e.student_id][e.skill_id].find(function(x) { return x.id === e.id; });
+              if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+            });
+            renderLB();
+            loadSharePanel(); // refresh UI to show merged badge
+          });
+        } else {
+          renderLB();
+          loadSharePanel();
+        }
       });
     } else {
-      mergedStudents = [];
+      // Remove merged students for this owner
+      mergedStudents = mergedStudents.filter(function(ms) { return ms.teacher_id !== ownerId; });
       renderLB();
+      loadSharePanel();
     }
   });
 }
@@ -2179,6 +2301,21 @@ function deleteEntry(entryId, skid) {
     renderStudentProgress();
     renderDash();
   });
+}
+
+// ── TEACHER LABEL HELPER ─────────────────────────────────────
+function getTeacherLabel(teacherId) {
+  // Check merged students to find which teacher owns them
+  var t = sharingWith.find(function(s) { return s.shared_with_teacher_id === teacherId; });
+  if (t) {
+    // Look up in our teacher map if we have it
+    var name = t._name || "";
+    return name ? name.split(" ")[0] : "Colleague";
+  }
+  // Try sharedWithMe
+  var s = sharedWithMe.find(function(s) { return s.owner_teacher_id === teacherId; });
+  if (s && s._name) return s._name.split(" ")[0];
+  return "Colleague";
 }
 
 // ── NAVIGATION ───────────────────────────────────────────────
