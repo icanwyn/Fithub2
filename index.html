@@ -615,7 +615,7 @@ tr:hover td{background:rgba(201,168,76,.03)}
 // ════════════════════════════════════════════════════════════
 var SB_URL   = "https://vsycqimhkzppautumsyo.supabase.co";
 var SB_KEY   = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzeWNxaW1oa3pwcGF1dHVtc3lvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MTMyMjEsImV4cCI6MjA5MzM4OTIyMX0.upBxit5d5nA6b9oVy8CbxIbzpO2m7_Df27IgKjg3l2k";
-var ADMIN_EMAIL = "your-admin@example.com"; // ✏️ CHANGE THIS to your email to see the Admin tab
+var ADMIN_EMAIL = "chuynh@lasdschools.org";
 // ════════════════════════════════════════════════════════════
 
 // ── Load Supabase SDK then boot ──────────────────────────────
@@ -734,7 +734,7 @@ function getRank(sid, skid) {
   return i === -1 ? null : i + 1;
 }
 function isAdmin() {
-  return ME && ADMIN_EMAIL !== "chuynh@lasdschools.org" && ME.email === ADMIN_EMAIL;
+  return ME && ME.email === ADMIN_EMAIL;
 }
 function syncPeriods(selectIds) {
   var periods = Array.from(new Set(students.map(function(s) { return s.period; }))).sort();
@@ -835,7 +835,11 @@ function bootApp(user) {
   ME = user;
   document.getElementById("login-page").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
-  if (isAdmin()) document.getElementById("nav-admin").classList.remove("hidden");
+  console.log("Logged in as:", ME.email, "| Admin:", ME.email === ADMIN_EMAIL);
+  if (isAdmin()) {
+    document.getElementById("nav-admin").classList.remove("hidden");
+    console.log("Admin tab shown");
+  }
   loadProfile().then(function() {
     return loadData();
   }).then(function() {
@@ -845,27 +849,36 @@ function bootApp(user) {
 }
 
 function loadActiveMerges() {
-  // Find all shares where others shared with me and merge is active
   return sb.from("teacher_shares")
     .select("*")
     .eq("shared_with_teacher_id", ME.id)
-    .eq("active", true)
     .then(function(r) {
-      var activeShares = r.data || [];
+      if (r.error) { console.error("loadActiveMerges error:", r.error.message); return; }
+      var activeShares = (r.data || []).filter(function(s) { return s.active !== false; });
+      console.log("Active shares found:", activeShares.length, r.data);
+      sharedWithMe = r.data || [];
       if (!activeShares.length) return;
-      // Store for panel rendering
-      sharedWithMe = activeShares;
-      // Load students from each active share
+
       var ownerIds = activeShares.map(function(s) { return s.owner_teacher_id; });
+      console.log("Loading students from owner IDs:", ownerIds);
+
+      // NOTE: RLS on students table must allow reading if teacher_id is in active share
+      // We select without RLS filter since the RLS policy should handle it
       return sb.from("students").select("*").in("teacher_id", ownerIds).then(function(sr) {
+        if (sr.error) { console.error("Merged students error:", sr.error.message); return; }
+        console.log("Merged students loaded:", sr.data ? sr.data.length : 0);
         var newStudents = (sr.data || []).filter(function(ms) {
           return !students.find(function(s) { return s.id === ms.id; });
         });
         mergedStudents = newStudents;
-        if (!newStudents.length) return;
-        // Load their entries
+        if (!newStudents.length) {
+          console.log("No new merged students (may be RLS blocked)");
+          return;
+        }
         var ids = newStudents.map(function(s) { return s.id; });
         return sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+          if (er.error) { console.error("Merged entries error:", er.error.message); return; }
+          console.log("Merged entries loaded:", er.data ? er.data.length : 0);
           (er.data || []).forEach(function(e) {
             if (!entries[e.student_id]) entries[e.student_id] = {};
             if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
@@ -874,8 +887,8 @@ function loadActiveMerges() {
             });
             if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
           });
-          // Re-render leaderboard with merged students
           renderLB();
+          renderPortalList();
         });
       });
     });
