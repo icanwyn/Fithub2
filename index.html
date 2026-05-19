@@ -355,8 +355,10 @@ tr:hover td{background:rgba(201,168,76,.03)}
           </div>
           <div class="card" style="flex:1;min-width:260px">
             <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:700;color:var(--gold);margin-bottom:8px">📥 Shared With Me</div>
-            <div style="font-size:13px;color:var(--text2);margin-bottom:14px">Merge to include their students in your roster, progress, and leaderboard. Absorb to permanently take ownership.</div>
+            <div style="font-size:13px;color:var(--text2);margin-bottom:10px">Merge to include their students everywhere. Absorb to permanently take ownership.</div>
+            <button onclick="debugAndReloadMerge()" style="font-size:12px;margin-bottom:12px;width:100%">🔄 Reload Merged Rosters</button>
             <div id="share-in"></div>
+            <div id="merge-debug" style="margin-top:8px;font-size:12px;color:var(--text3)"></div>
             <div id="absorb-section" class="hidden" style="margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
               <div style="font-family:'Cormorant Garamond',serif;font-size:16px;font-weight:700;color:var(--gold);margin-bottom:6px">🔄 Absorb Students</div>
               <div style="font-size:13px;color:var(--text2);margin-bottom:12px">Permanently transfer selected students to your account. You can update their period and grade before absorbing.</div>
@@ -2389,6 +2391,99 @@ function getTeacherLabel(teacherId) {
   var s = sharedWithMe.find(function(s) { return s.owner_teacher_id === teacherId; });
   if (s && s._name) return s._name.split(" ")[0];
   return "Colleague";
+}
+
+// ── DEBUG + RELOAD MERGE ─────────────────────────────────────
+function debugAndReloadMerge() {
+  var dbg = document.getElementById("merge-debug");
+  if (dbg) dbg.textContent = "Checking shares…";
+
+  // Step 1: check teacher_shares table
+  sb.from("teacher_shares").select("*").eq("shared_with_teacher_id", ME.id).then(function(r) {
+    if (r.error) {
+      if (dbg) dbg.innerHTML = '<span style="color:var(--red)">Error reading shares: ' + r.error.message + '</span>';
+      return;
+    }
+    var rows = r.data || [];
+    if (!rows.length) {
+      if (dbg) dbg.innerHTML = '<span style="color:var(--red)">No shares found. Ask your colleague to share their roster with your email: ' + ME.email + '</span>';
+      return;
+    }
+    var active = rows.filter(function(r) { return r.active !== false; });
+    if (dbg) dbg.textContent = rows.length + " share(s) found, " + active.length + " active. Loading students…";
+
+    sharedWithMe = rows;
+    if (!active.length) {
+      if (dbg) dbg.innerHTML = '<span style="color:var(--red)">Shares exist but none are active. Toggle the Merge checkbox above.</span>';
+      return;
+    }
+
+    // Step 2: try to load their students
+    var ownerIds = active.map(function(s) { return s.owner_teacher_id; });
+    sb.from("students").select("*").in("teacher_id", ownerIds).then(function(sr) {
+      if (sr.error) {
+        if (dbg) dbg.innerHTML = '<span style="color:var(--red)">RLS blocking students read: ' + sr.error.message + '<br>Run the SQL policy fix in Supabase.</span>';
+        return;
+      }
+      var count = sr.data ? sr.data.length : 0;
+      if (!count) {
+        if (dbg) dbg.innerHTML = '<span style="color:var(--red)">Shares found but 0 students returned — RLS policy is blocking. Run the SQL fix below.</span>';
+        // Show SQL fix inline
+        var sqlBox = document.createElement("div");
+        sqlBox.style.cssText = "margin-top:8px;background:var(--surface2);border-radius:6px;padding:10px;font-size:11px;font-family:monospace;color:var(--gold);white-space:pre-wrap";
+                var sqlText = [
+          "-- Run this in Supabase SQL Editor:",
+          "DROP POLICY IF EXISTS \"students: select own\" ON students;",
+          "DROP POLICY IF EXISTS \"students: select own or shared\" ON students;",
+          "",
+          "CREATE POLICY \"students: select\"",
+          "  ON students FOR SELECT TO authenticated",
+          "  USING (",
+          "    teacher_id = auth.uid()",
+          "    OR teacher_id IN (",
+          "      SELECT owner_teacher_id FROM teacher_shares",
+          "      WHERE shared_with_teacher_id = auth.uid()",
+          "    )",
+          "  );"
+        ].join("\n");
+        sqlBox.textContent = sqlText;
+        if (dbg) dbg.appendChild(sqlBox);
+        return;
+      }
+
+      // All good — load and render
+      var newStudents = (sr.data || []).filter(function(ms) {
+        return !students.find(function(s) { return s.id === ms.id; });
+      });
+      mergedStudents = newStudents;
+      if (dbg) dbg.innerHTML = '<span style="color:var(--gold)">✓ ' + count + ' merged students loaded successfully!</span>';
+
+      // Load entries
+      var ids = newStudents.map(function(s) { return s.id; });
+      if (!ids.length) { renderAll(); return; }
+      sb.from("entries").select("*").in("student_id", ids).order("logged_at").then(function(er) {
+        (er.data || []).forEach(function(e) {
+          if (!entries[e.student_id]) entries[e.student_id] = {};
+          if (!entries[e.student_id][e.skill_id]) entries[e.student_id][e.skill_id] = [];
+          var exists = entries[e.student_id][e.skill_id].find(function(x) {
+            return typeof x === "object" && x.id === e.id;
+          });
+          if (!exists) entries[e.student_id][e.skill_id].push({ id: e.id, value: Number(e.value), week_label: e.week_label });
+        });
+        renderAll();
+        loadSharePanel();
+        showAbsorbSection();
+      });
+    });
+  });
+}
+
+function renderAll() {
+  syncFilters();
+  renderRoster();
+  renderProgress();
+  renderLB();
+  renderPortalList();
 }
 
 // ── ABSORB STUDENTS ──────────────────────────────────────────
